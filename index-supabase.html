@@ -382,61 +382,23 @@
             <!-- 左側：資產總覽與月度總覽 -->
             <div class="space-y-6">
                 <!-- 總資產卡片 -->
-                <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
-                    <div class="flex items-start justify-between mb-4">
-                        <h2 class="text-xl font-bold text-teal-800 flex items-center gap-2">
-                            <span>💎</span>
-                            <span>總資產</span>
-                        </h2>
-                        <!-- 编辑按钮 -->
-                        <button 
-                            id="edit-assets-btn"
-                            onclick="toggleEditAssets()"
-                            class="px-3 py-1 text-sm bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors"
-                        >
-                            ✏️ 編輯
-                        </button>
-                        <!-- 编辑区域（默认隐藏） -->
-                        <div id="edit-assets-section" class="hidden flex items-center gap-2">
-                            <input 
-                                type="number" 
-                                id="assets-input" 
-                                placeholder="金額"
-                                class="input-field w-20 sm:w-24 px-2 py-1 text-sm rounded-lg border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
-                            >
-                            <button 
-                                onclick="updateTotalAssets()"
-                                class="px-2 sm:px-3 py-1 text-sm bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors whitespace-nowrap"
-                                title="覆蓋設定總資產"
-                            >
-                                設定
-                            </button>
-                            <button 
-                                onclick="toggleEditAssets()"
-                                class="px-2 sm:px-3 py-1 text-sm bg-gray-400 hover:bg-gray-500 text-white rounded-lg transition-colors"
-                                title="取消"
-                            >
-                                ✕
-                            </button>
-                        </div>
-                    </div>
+                <div class="glass-card rounded-3xl p-6 sm:p-8 shadow-xl">
+                    <!-- 总资产标题和图标（居中放大） -->
                     <div class="text-center mb-6">
-                        <p class="text-3xl sm:text-4xl font-bold text-teal-700" id="total-assets">$0</p>
+                        <div class="flex items-center justify-center gap-3 mb-4">
+                            <span class="text-5xl sm:text-6xl">💎</span>
+                            <h2 class="text-3xl sm:text-4xl font-bold text-teal-800">總資產</h2>
+                        </div>
+                        <p class="text-5xl sm:text-6xl font-bold text-teal-700 mb-8" id="total-assets">$0</p>
                     </div>
-                    <div class="space-y-3">
-                        <input 
-                            type="number" 
-                            id="add-assets-input" 
-                            placeholder="輸入要新增的金額"
-                            class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
-                        >
-                        <button 
-                            onclick="addToTotalAssets()"
-                            class="btn-primary w-full py-3 rounded-2xl text-white font-medium"
-                        >
-                            新增資產
-                        </button>
-                    </div>
+                    
+                    <!-- 新增资产按钮 -->
+                    <button 
+                        onclick="promptAddAssets()"
+                        class="btn-primary w-full py-4 rounded-2xl text-white font-medium text-lg"
+                    >
+                        ➕ 新增資產
+                    </button>
                 </div>
 
                 <!-- 本月支出預覽 -->
@@ -928,65 +890,13 @@
         }
 
         // 切换编辑总资产区域
-        window.toggleEditAssets = function() {
-            const editBtn = document.getElementById('edit-assets-btn');
-            const editSection = document.getElementById('edit-assets-section');
+        // 弹出输入框新增资产
+        window.promptAddAssets = async function() {
+            const inputAmount = prompt('請輸入要新增的金額（可輸入負數來扣除）:');
             
-            if (editSection.classList.contains('hidden')) {
-                // 显示编辑区域
-                editSection.classList.remove('hidden');
-                editBtn.classList.add('hidden');
-            } else {
-                // 隐藏编辑区域
-                editSection.classList.add('hidden');
-                editBtn.classList.remove('hidden');
-                // 清空输入框
-                document.getElementById('assets-input').value = '';
-            }
-        };
-
-        window.updateTotalAssets = async function() {
-            const input = document.getElementById('assets-input');
-            const newAssets = Number(input.value);
-
-            if (isNaN(newAssets) || newAssets < 0) {
-                showNotification('請輸入有效的金額', 'error');
-                return;
-            }
-
-            try {
-                // 使用 upsert 插入或更新（覆蓋設定）
-                const { data, error } = await supabaseClient
-                    .from('assets')
-                    .upsert({
-                        user_id: currentUser.id,
-                        total_assets: newAssets,
-                        updated_at: new Date().toISOString()
-                    }, {
-                        onConflict: 'user_id'
-                    })
-                    .select();
-
-                if (error) {
-                    console.error('Upsert error:', error);
-                    throw error;
-                }
-
-                console.log('✅ 总资产已设定:', data);
-                await loadTotalAssets();
-                showNotification('總資產已設定', 'success');
-                input.value = '';
-                // 关闭编辑区域
-                toggleEditAssets();
-            } catch (error) {
-                console.error('設定總資產失敗:', error);
-                showNotification(`設定失敗: ${error.message}`, 'error');
-            }
-        };
-
-        window.addToTotalAssets = async function() {
-            const input = document.getElementById('add-assets-input');
-            const addAmount = Number(input.value);
+            if (inputAmount === null) return; // 用户取消
+            
+            const addAmount = Number(inputAmount);
 
             if (isNaN(addAmount) || addAmount === 0) {
                 showNotification('請輸入有效的金額', 'error');
@@ -1025,11 +935,9 @@
                 } else {
                     showNotification(`已扣除 ${formatCurrency(Math.abs(addAmount))}，總資產現為 ${formatCurrency(newAssets)}`, 'success');
                 }
-                
-                input.value = '';
             } catch (error) {
                 console.error('新增資產失敗:', error);
-                showNotification(`新增失敗: ${error.message}`, 'error');
+                showNotification(`操作失敗: ${error.message}`, 'error');
             }
         };
 
