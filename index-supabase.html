@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>休閒風個人記帳本 (本地版)</title>
+    <title>休閒風個人記帳本 (Supabase 雲端版)</title>
     
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- Chart.js CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- Supabase CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
@@ -75,13 +78,21 @@
         <p id="notification-message" class="font-medium"></p>
     </div>
 
+    <!-- 載入中狀態 -->
+    <div id="loading" class="flex items-center justify-center min-h-screen">
+        <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-teal-600 mb-4"></div>
+            <p class="text-teal-700 font-medium text-lg">連接雲端數據庫...</p>
+        </div>
+    </div>
+
     <!-- 主要內容 -->
-    <div id="main-content" class="max-w-7xl mx-auto">
+    <div id="main-content" class="hidden max-w-7xl mx-auto">
         <!-- 標題 -->
         <header class="text-center mb-8">
             <h1 class="text-4xl md:text-5xl font-bold text-teal-800 mb-2">💰 休閒風個人記帳本</h1>
             <p class="text-teal-600">輕鬆管理您的財務，追蹤每一筆支出</p>
-            <p class="text-sm text-teal-500 mt-2">📱 本地版本 - 數據存儲在您的瀏覽器中</p>
+            <p class="text-sm text-teal-500 mt-2">☁️ Supabase 雲端版 - 數據自動同步到雲端</p>
         </header>
 
         <!-- 響應式佈局 -->
@@ -320,7 +331,7 @@
                     <div id="transaction-list" class="scroll-container space-y-3">
                         <!-- 交易紀錄將動態載入 -->
                         <div class="text-center text-gray-400 py-8">
-                            <p>尚無交易紀錄</p>
+                            <p>載入中...</p>
                         </div>
                     </div>
                 </div>
@@ -333,84 +344,87 @@
         </footer>
     </div>
 
-    <script>
+    <script type="module">
+        // ============================================
+        // Supabase 配置（請替換為您的實際值）
+        // ============================================
+        const SUPABASE_URL = 'https://cgptfjacrtbzcilkzusq.supabase.co';  // 替換為您的 Supabase Project URL
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNncHRmamFjcnRiemNpbGt6dXNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE4MjUyNTcsImV4cCI6MjA3NzQwMTI1N30.vuoJpoV6zcVWnzBHxFJue3QawoPj7tPe0vk3w0hjTgs';  // 替換為您的 anon public key
+
+        const { createClient } = supabase;
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
+
         // ============================================
         // 全域變數
         // ============================================
-        let expenseChart = null; // 圓餅圖實例
+        let expenseChart = null;
+        let currentUser = null;
 
         // ============================================
-        // 標籤切換功能
+        // 認證與初始化
         // ============================================
-        function switchTab(tab) {
-            const expenseForm = document.getElementById('form-expense');
-            const installmentForm = document.getElementById('form-installment');
-            const expenseTab = document.getElementById('tab-expense');
-            const installmentTab = document.getElementById('tab-installment');
+        async function initializeApp() {
+            try {
+                // 檢查當前用戶
+                const { data: { user } } = await supabaseClient.auth.getUser();
+                
+                if (user) {
+                    currentUser = user;
+                    console.log('✓ 用戶已登入:', user.id);
+                } else {
+                    // 匿名登入
+                    const { data, error } = await supabaseClient.auth.signInAnonymously();
+                    if (error) throw error;
+                    currentUser = data.user;
+                    console.log('✓ 匿名登入成功:', currentUser.id);
+                }
 
-            if (tab === 'expense') {
-                expenseForm.classList.remove('hidden');
-                installmentForm.classList.add('hidden');
-                expenseTab.classList.add('bg-teal-500', 'text-white');
-                expenseTab.classList.remove('bg-gray-100', 'text-gray-600');
-                installmentTab.classList.add('bg-gray-100', 'text-gray-600');
-                installmentTab.classList.remove('bg-teal-500', 'text-white');
-            } else {
-                expenseForm.classList.add('hidden');
-                installmentForm.classList.remove('hidden');
-                installmentTab.classList.add('bg-teal-500', 'text-white');
-                installmentTab.classList.remove('bg-gray-100', 'text-gray-600');
-                expenseTab.classList.add('bg-gray-100', 'text-gray-600');
-                expenseTab.classList.remove('bg-teal-500', 'text-white');
-            }
-        }
-
-        // ============================================
-        // 本地儲存管理 (使用 localStorage)
-        // ============================================
-        
-        class LocalStorage {
-            static getExpenses() {
-                const data = localStorage.getItem('expenses');
-                return data ? JSON.parse(data) : [];
-            }
-
-            static saveExpense(expense) {
-                const expenses = this.getExpenses();
-                expenses.push(expense);
-                localStorage.setItem('expenses', JSON.stringify(expenses));
-            }
-
-            static getInstallments() {
-                const data = localStorage.getItem('installments');
-                return data ? JSON.parse(data) : [];
-            }
-
-            static saveInstallment(installment) {
-                const installments = this.getInstallments();
-                installments.push(installment);
-                localStorage.setItem('installments', JSON.stringify(installments));
-            }
-
-            static getTotalAssets() {
-                const data = localStorage.getItem('totalAssets');
-                return data ? Number(data) : 0;
-            }
-
-            static setTotalAssets(amount) {
-                localStorage.setItem('totalAssets', amount.toString());
+                // 設置默認日期
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('expense-date').value = today;
+                
+                // 設置默認標籤樣式
+                switchTab('expense');
+                
+                // 載入數據
+                await loadTotalAssets();
+                await updateMonthlySummaryAndList();
+                await updateExpenseChart();
+                
+                // 顯示主要內容
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+                
+                console.log('✓ 應用程式已啟動');
+            } catch (error) {
+                console.error('初始化失敗:', error);
+                showNotification('初始化失敗，請檢查網絡連接', 'error');
             }
         }
 
         // ============================================
         // 總資產管理
         // ============================================
-        function loadTotalAssets() {
-            const totalAssets = LocalStorage.getTotalAssets();
-            document.getElementById('total-assets').textContent = formatCurrency(totalAssets);
+        async function loadTotalAssets() {
+            try {
+                const { data, error } = await supabaseClient
+                    .from('assets')
+                    .select('total_assets')
+                    .eq('user_id', currentUser.id)
+                    .maybeSingle();
+
+                // 如果没有数据，显示 0
+                const totalAssets = data ? Number(data.total_assets || 0) : 0;
+                document.getElementById('total-assets').textContent = formatCurrency(totalAssets);
+                
+                console.log('💰 总资产:', totalAssets);
+            } catch (error) {
+                console.error('載入總資產失敗:', error);
+                document.getElementById('total-assets').textContent = formatCurrency(0);
+            }
         }
 
-        function updateTotalAssets() {
+        window.updateTotalAssets = async function() {
             const input = document.getElementById('assets-input');
             const newAssets = Number(input.value);
 
@@ -419,13 +433,35 @@
                 return;
             }
 
-            LocalStorage.setTotalAssets(newAssets);
-            loadTotalAssets();
-            showNotification('總資產已設定', 'success');
-            input.value = '';
-        }
+            try {
+                // 使用 upsert 插入或更新（覆蓋設定）
+                const { data, error } = await supabaseClient
+                    .from('assets')
+                    .upsert({
+                        user_id: currentUser.id,
+                        total_assets: newAssets,
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'user_id'
+                    })
+                    .select();
 
-        function addToTotalAssets() {
+                if (error) {
+                    console.error('Upsert error:', error);
+                    throw error;
+                }
+
+                console.log('✅ 总资产已设定:', data);
+                await loadTotalAssets();
+                showNotification('總資產已設定', 'success');
+                input.value = '';
+            } catch (error) {
+                console.error('設定總資產失敗:', error);
+                showNotification(`設定失敗: ${error.message}`, 'error');
+            }
+        };
+
+        window.addToTotalAssets = async function() {
             const input = document.getElementById('add-assets-input');
             const addAmount = Number(input.value);
 
@@ -434,25 +470,50 @@
                 return;
             }
 
-            const currentAssets = LocalStorage.getTotalAssets();
-            const newAssets = Math.max(0, currentAssets + addAmount);
-            
-            LocalStorage.setTotalAssets(newAssets);
-            loadTotalAssets();
-            
-            if (addAmount > 0) {
-                showNotification(`已新增 ${formatCurrency(addAmount)}，總資產現為 ${formatCurrency(newAssets)}`, 'success');
-            } else {
-                showNotification(`已扣除 ${formatCurrency(Math.abs(addAmount))}，總資產現為 ${formatCurrency(newAssets)}`, 'success');
+            try {
+                // 獲取當前總資產
+                const { data: assetsData } = await supabaseClient
+                    .from('assets')
+                    .select('total_assets')
+                    .eq('user_id', currentUser.id)
+                    .maybeSingle();
+
+                const currentAssets = assetsData ? Number(assetsData.total_assets || 0) : 0;
+                const newAssets = Math.max(0, currentAssets + addAmount);
+
+                // 更新總資產
+                const { error } = await supabaseClient
+                    .from('assets')
+                    .upsert({
+                        user_id: currentUser.id,
+                        total_assets: newAssets,
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'user_id'
+                    });
+
+                if (error) throw error;
+
+                console.log('✅ 资产已新增:', addAmount, '新总资产:', newAssets);
+                await loadTotalAssets();
+                
+                if (addAmount > 0) {
+                    showNotification(`已新增 ${formatCurrency(addAmount)}，總資產現為 ${formatCurrency(newAssets)}`, 'success');
+                } else {
+                    showNotification(`已扣除 ${formatCurrency(Math.abs(addAmount))}，總資產現為 ${formatCurrency(newAssets)}`, 'success');
+                }
+                
+                input.value = '';
+            } catch (error) {
+                console.error('新增資產失敗:', error);
+                showNotification(`新增失敗: ${error.message}`, 'error');
             }
-            
-            input.value = '';
-        }
+        };
 
         // ============================================
         // 日常支出記錄
         // ============================================
-        function addExpense() {
+        window.addExpense = async function() {
             const date = document.getElementById('expense-date').value;
             const amount = Number(document.getElementById('expense-amount').value);
             const category = document.getElementById('expense-category').value;
@@ -463,40 +524,62 @@
                 return;
             }
 
-            const expense = {
-                id: Date.now().toString(),
-                date: date,
-                amount: amount,
-                category: category,
-                description: description || '',
-                timestamp: Date.now()
-            };
+            try {
+                // 新增支出
+                const { error } = await supabaseClient
+                    .from('expenses')
+                    .insert({
+                        user_id: currentUser.id,
+                        date: date,
+                        amount: amount,
+                        category: category,
+                        description: description || ''
+                    });
 
-            LocalStorage.saveExpense(expense);
-            
-            // 自動從總資產扣除支出金額
-            const currentAssets = LocalStorage.getTotalAssets();
-            const newAssets = currentAssets - amount;
-            LocalStorage.setTotalAssets(newAssets);
-            loadTotalAssets();
-            
-            showNotification(`支出已記錄，總資產已扣除 ${formatCurrency(amount)}`, 'success');
-            
-            // 清空表單
-            document.getElementById('expense-date').value = new Date().toISOString().split('T')[0];
-            document.getElementById('expense-amount').value = '';
-            document.getElementById('expense-category').value = '餐飲';
-            document.getElementById('expense-description').value = '';
+                if (error) throw error;
 
-            // 更新顯示
-            updateMonthlySummaryAndList();
-            updateExpenseChart();
-        }
+                // 自動從總資產扣除
+                const { data: assetsData } = await supabaseClient
+                    .from('assets')
+                    .select('total_assets')
+                    .eq('user_id', currentUser.id)
+                    .maybeSingle();
+
+                const currentAssets = assetsData ? Number(assetsData.total_assets || 0) : 0;
+                const newAssets = Math.max(0, currentAssets - amount); // 不允许负数
+                
+                await supabaseClient
+                    .from('assets')
+                    .upsert({
+                        user_id: currentUser.id,
+                        total_assets: newAssets,
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'user_id'
+                    });
+
+                await loadTotalAssets();
+                showNotification(`支出已記錄，總資產已扣除 ${formatCurrency(amount)}`, 'success');
+                
+                // 清空表單
+                document.getElementById('expense-date').value = new Date().toISOString().split('T')[0];
+                document.getElementById('expense-amount').value = '';
+                document.getElementById('expense-category').value = '餐飲';
+                document.getElementById('expense-description').value = '';
+
+                // 更新顯示
+                await updateMonthlySummaryAndList();
+                await updateExpenseChart();
+            } catch (error) {
+                console.error('新增支出失敗:', error);
+                showNotification('新增失敗，請稍後再試', 'error');
+            }
+        };
 
         // ============================================
         // 信用卡分期追蹤
         // ============================================
-        function addInstallment() {
+        window.addInstallment = async function() {
             const totalAmount = Number(document.getElementById('installment-total').value);
             const periods = Number(document.getElementById('installment-periods').value);
             const startMonth = document.getElementById('installment-start').value;
@@ -518,124 +601,139 @@
 
             const monthlyPayment = totalAmount / periods;
 
-            const installment = {
-                id: Date.now().toString(),
-                totalAmount: totalAmount,
-                periods: periods,
-                startMonth: startMonth,
-                category: category,
-                description: description || '',
-                monthlyPayment: monthlyPayment,
-                timestamp: Date.now()
-            };
+            try {
+                // 新增分期計畫
+                const { error } = await supabaseClient
+                    .from('installments')
+                    .insert({
+                        user_id: currentUser.id,
+                        total_amount: totalAmount,
+                        periods: periods,
+                        start_month: startMonth,
+                        category: category,
+                        description: description || '',
+                        monthly_payment: monthlyPayment
+                    });
 
-            console.log('📝 新增分期計畫:', installment);
-            LocalStorage.saveInstallment(installment);
-            
-            // 自動從總資產扣除分期總額（因為這筆錢已經花了）
-            const currentAssets = LocalStorage.getTotalAssets();
-            const newAssets = Math.max(0, currentAssets - totalAmount);
-            LocalStorage.setTotalAssets(newAssets);
-            loadTotalAssets();
-            
-            // 驗證保存
-            const savedInstallments = LocalStorage.getInstallments();
-            console.log('💾 已保存的分期計畫:', savedInstallments);
-            
-            showNotification(`分期計畫已新增，總資產已扣除 ${formatCurrency(totalAmount)}`, 'success');
-            
-            // 清空表單
-            document.getElementById('installment-total').value = '';
-            document.getElementById('installment-periods').value = '';
-            document.getElementById('installment-start').value = '';
-            document.getElementById('installment-category').value = '餐飲';
-            document.getElementById('installment-description').value = '';
+                if (error) throw error;
 
-            // 更新顯示
-            console.log('🔄 開始更新顯示...');
-            updateMonthlySummaryAndList();
-        }
+                // 自動從總資產扣除分期總額
+                const { data: assetsData } = await supabaseClient
+                    .from('assets')
+                    .select('total_assets')
+                    .eq('user_id', currentUser.id)
+                    .maybeSingle();
+
+                const currentAssets = assetsData ? Number(assetsData.total_assets || 0) : 0;
+                const newAssets = Math.max(0, currentAssets - totalAmount);
+                
+                await supabaseClient
+                    .from('assets')
+                    .upsert({
+                        user_id: currentUser.id,
+                        total_assets: newAssets,
+                        updated_at: new Date().toISOString()
+                    }, {
+                        onConflict: 'user_id'
+                    });
+
+                await loadTotalAssets();
+                showNotification(`分期計畫已新增，總資產已扣除 ${formatCurrency(totalAmount)}`, 'success');
+                
+                // 清空表單
+                document.getElementById('installment-total').value = '';
+                document.getElementById('installment-periods').value = '';
+                document.getElementById('installment-start').value = '';
+                document.getElementById('installment-category').value = '餐飲';
+                document.getElementById('installment-description').value = '';
+
+                // 更新顯示
+                await updateMonthlySummaryAndList();
+            } catch (error) {
+                console.error('新增分期計畫失敗:', error);
+                showNotification('新增失敗，請稍後再試', 'error');
+            }
+        };
 
         // ============================================
         // 月度總覽與交易清單
         // ============================================
-        function updateMonthlySummaryAndList() {
+        async function updateMonthlySummaryAndList() {
             const currentMonth = new Date().toISOString().slice(0, 7);
             
             let monthlyExpenses = 0;
             let monthlyInstallments = 0;
             const transactionList = [];
 
-            // 處理日常支出
-            const expenses = LocalStorage.getExpenses();
-            expenses.forEach(expense => {
-                const expenseMonth = expense.date.slice(0, 7);
-                const amount = Number(expense.amount || 0);
-                
-                if (expenseMonth === currentMonth) {
-                    monthlyExpenses += amount;
-                }
-                
-                transactionList.push({
-                    id: expense.id,
-                    type: 'expense',
-                    date: expense.date,
-                    amount: amount,
-                    category: expense.category,
-                    description: expense.description,
-                    timestamp: expense.timestamp
-                });
-            });
+            try {
+                // 獲取日常支出
+                const { data: expenses, error: expensesError } = await supabaseClient
+                    .from('expenses')
+                    .select('*')
+                    .eq('user_id', currentUser.id)
+                    .order('created_at', { ascending: false });
 
-            // 處理分期計畫
-            const installments = LocalStorage.getInstallments();
-            console.log(`💳 處理分期計畫 (當前月份: ${currentMonth}):`, installments);
-            
-            installments.forEach((installment, index) => {
-                const totalAmount = Number(installment.totalAmount || 0);
-                const periods = Number(installment.periods || 1);
-                const startMonth = installment.startMonth;
-                const monthlyPayment = Number(installment.monthlyPayment || (totalAmount / periods));
-                
-                console.log(`  分期 #${index + 1}:`, {
-                    totalAmount,
-                    periods,
-                    startMonth,
-                    monthlyPayment
-                });
-                
-                if (isMonthInInstallmentRange(currentMonth, startMonth, periods)) {
-                    console.log(`  ✅ 分期 #${index + 1} 在範圍內，加入本月支出`);
-                    monthlyInstallments += monthlyPayment;
+                if (expensesError) throw expensesError;
+
+                expenses?.forEach(expense => {
+                    const expenseMonth = expense.date.slice(0, 7);
+                    const amount = Number(expense.amount || 0);
+                    
+                    if (expenseMonth === currentMonth) {
+                        monthlyExpenses += amount;
+                    }
                     
                     transactionList.push({
-                        id: installment.id,
-                        type: 'installment',
-                        date: currentMonth + '-01',
-                        amount: monthlyPayment,
-                        category: installment.category,
-                        description: `${installment.description} (分期 ${periods} 期)`,
-                        timestamp: installment.timestamp,
-                        installmentInfo: {
-                            totalAmount: totalAmount,
-                            periods: periods,
-                            startMonth: startMonth
-                        }
+                        id: expense.id,
+                        type: 'expense',
+                        date: expense.date,
+                        amount: amount,
+                        category: expense.category,
+                        description: expense.description,
+                        timestamp: new Date(expense.created_at).getTime()
                     });
-                } else {
-                    console.log(`  ❌ 分期 #${index + 1} 不在範圍內`);
-                }
-            });
-            
-            console.log(`💰 本月分期攤提總額: ${monthlyInstallments}`);
+                });
 
-            // 更新儀表板
-            document.getElementById('monthly-expenses').textContent = formatCurrency(monthlyExpenses);
-            document.getElementById('monthly-installments').textContent = formatCurrency(monthlyInstallments);
-            document.getElementById('monthly-total').textContent = formatCurrency(monthlyExpenses + monthlyInstallments);
-            
-            // 渲染交易清單
-            renderTransactionList(transactionList);
+                // 獲取分期計畫
+                const { data: installments, error: installmentsError } = await supabaseClient
+                    .from('installments')
+                    .select('*')
+                    .eq('user_id', currentUser.id)
+                    .order('created_at', { ascending: false });
+
+                if (installmentsError) throw installmentsError;
+
+                installments?.forEach(installment => {
+                    const totalAmount = Number(installment.total_amount || 0);
+                    const periods = Number(installment.periods || 1);
+                    const startMonth = installment.start_month;
+                    const monthlyPayment = Number(installment.monthly_payment || (totalAmount / periods));
+                    
+                    if (isMonthInInstallmentRange(currentMonth, startMonth, periods)) {
+                        monthlyInstallments += monthlyPayment;
+                        
+                        transactionList.push({
+                            id: installment.id,
+                            type: 'installment',
+                            date: currentMonth + '-01',
+                            amount: monthlyPayment,
+                            category: installment.category,
+                            description: `${installment.description} (分期 ${periods} 期)`,
+                            timestamp: new Date(installment.created_at).getTime()
+                        });
+                    }
+                });
+
+                // 更新儀表板
+                document.getElementById('monthly-expenses').textContent = formatCurrency(monthlyExpenses);
+                document.getElementById('monthly-installments').textContent = formatCurrency(monthlyInstallments);
+                document.getElementById('monthly-total').textContent = formatCurrency(monthlyExpenses + monthlyInstallments);
+                
+                // 渲染交易清單
+                renderTransactionList(transactionList);
+            } catch (error) {
+                console.error('更新月度總覽失敗:', error);
+            }
         }
 
         // 檢查月份是否在分期範圍內
@@ -645,19 +743,7 @@
             const end = new Date(start);
             end.setMonth(end.getMonth() + periods);
             
-            const isInRange = current >= start && current < end;
-            
-            console.log(`📅 檢查分期範圍:`, {
-                currentMonth,
-                startMonth,
-                periods,
-                current: current.toISOString(),
-                start: start.toISOString(),
-                end: end.toISOString(),
-                isInRange
-            });
-            
-            return isInRange;
+            return current >= start && current < end;
         }
 
         // 渲染交易清單
@@ -706,128 +792,127 @@
         // ============================================
         // 圓餅圖功能
         // ============================================
-        function updateExpenseChart() {
-            const expenses = LocalStorage.getExpenses();
-            const categoryStats = {};
-            const categoryColors = {
-                '餐飲': '#FF6384',
-                '交通': '#36A2EB',
-                '娛樂': '#FFCE56',
-                '購物': '#4BC0C0',
-                '其他': '#9966FF'
-            };
-            const categoryIcons = {
-                '餐飲': '🍽️',
-                '交通': '🚗',
-                '娛樂': '🎮',
-                '購物': '🛍️',
-                '其他': '📝'
-            };
+        async function updateExpenseChart() {
+            try {
+                const { data: expenses, error } = await supabaseClient
+                    .from('expenses')
+                    .select('category, amount')
+                    .eq('user_id', currentUser.id);
 
-            // 統計各類別的支出
-            expenses.forEach(expense => {
-                const category = expense.category;
-                const amount = Number(expense.amount || 0);
-                
-                if (!categoryStats[category]) {
-                    categoryStats[category] = 0;
+                if (error) throw error;
+
+                const categoryStats = {};
+                const categoryColors = {
+                    '餐飲': '#FF6384',
+                    '交通': '#36A2EB',
+                    '娛樂': '#FFCE56',
+                    '購物': '#4BC0C0',
+                    '其他': '#9966FF'
+                };
+                const categoryIcons = {
+                    '餐飲': '🍽️',
+                    '交通': '🚗',
+                    '娛樂': '🎮',
+                    '購物': '🛍️',
+                    '其他': '📝'
+                };
+
+                expenses?.forEach(expense => {
+                    const category = expense.category;
+                    const amount = Number(expense.amount || 0);
+                    
+                    if (!categoryStats[category]) {
+                        categoryStats[category] = 0;
+                    }
+                    categoryStats[category] += amount;
+                });
+
+                const labels = Object.keys(categoryStats);
+                const data = Object.values(categoryStats);
+                const backgroundColor = labels.map(label => categoryColors[label] || '#999');
+                const totalExpense = data.reduce((sum, val) => sum + val, 0);
+
+                if (totalExpense === 0) {
+                    const canvas = document.getElementById('expense-chart');
+                    const ctx = canvas.getContext('2d');
+                    
+                    if (expenseChart) {
+                        expenseChart.destroy();
+                        expenseChart = null;
+                    }
+                    
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.font = '16px "Noto Sans TC"';
+                    ctx.fillStyle = '#9CA3AF';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('尚無支出數據', canvas.width / 2, canvas.height / 2);
+                    
+                    document.getElementById('chart-legend').innerHTML = '';
+                    return;
                 }
-                categoryStats[category] += amount;
-            });
 
-            // 準備圖表數據
-            const labels = Object.keys(categoryStats);
-            const data = Object.values(categoryStats);
-            const backgroundColor = labels.map(label => categoryColors[label] || '#999');
-            
-            // 計算總支出
-            const totalExpense = data.reduce((sum, val) => sum + val, 0);
-
-            // 如果沒有數據，顯示提示
-            if (totalExpense === 0) {
-                const canvas = document.getElementById('expense-chart');
-                const ctx = canvas.getContext('2d');
-                
-                // 清除現有圖表
                 if (expenseChart) {
                     expenseChart.destroy();
-                    expenseChart = null;
                 }
-                
-                // 顯示無數據提示
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.font = '16px "Noto Sans TC"';
-                ctx.fillStyle = '#9CA3AF';
-                ctx.textAlign = 'center';
-                ctx.fillText('尚無支出數據', canvas.width / 2, canvas.height / 2);
-                
-                // 清空圖例
-                document.getElementById('chart-legend').innerHTML = '';
-                return;
-            }
 
-            // 銷毀舊圖表
-            if (expenseChart) {
-                expenseChart.destroy();
-            }
-
-            // 創建新圖表
-            const ctx = document.getElementById('expense-chart').getContext('2d');
-            expenseChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: backgroundColor,
-                        borderWidth: 2,
-                        borderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false // 使用自定義圖例
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const label = context.label || '';
-                                    const value = context.parsed || 0;
-                                    const percentage = ((value / totalExpense) * 100).toFixed(1);
-                                    return `${label}: ${formatCurrency(value)} (${percentage}%)`;
+                const ctx = document.getElementById('expense-chart').getContext('2d');
+                expenseChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: backgroundColor,
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = context.parsed || 0;
+                                        const percentage = ((value / totalExpense) * 100).toFixed(1);
+                                        return `${label}: ${formatCurrency(value)} (${percentage}%)`;
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            });
+                });
 
-            // 生成自定義圖例
-            let legendHTML = '';
-            labels.forEach((label, index) => {
-                const value = data[index];
-                const percentage = ((value / totalExpense) * 100).toFixed(1);
-                const color = backgroundColor[index];
-                const icon = categoryIcons[label] || '💰';
+                let legendHTML = '';
+                labels.forEach((label, index) => {
+                    const value = data[index];
+                    const percentage = ((value / totalExpense) * 100).toFixed(1);
+                    const color = backgroundColor[index];
+                    const icon = categoryIcons[label] || '💰';
+                    
+                    legendHTML += `
+                        <div class="flex items-center justify-between text-sm">
+                            <div class="flex items-center gap-2">
+                                <div class="w-4 h-4 rounded-full" style="background-color: ${color}"></div>
+                                <span>${icon} ${label}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-medium">${formatCurrency(value)}</span>
+                                <span class="text-gray-500">(${percentage}%)</span>
+                            </div>
+                        </div>
+                    `;
+                });
                 
-                legendHTML += `
-                    <div class="flex items-center justify-between text-sm">
-                        <div class="flex items-center gap-2">
-                            <div class="w-4 h-4 rounded-full" style="background-color: ${color}"></div>
-                            <span>${icon} ${label}</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="font-medium">${formatCurrency(value)}</span>
-                            <span class="text-gray-500">(${percentage}%)</span>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            document.getElementById('chart-legend').innerHTML = legendHTML;
+                document.getElementById('chart-legend').innerHTML = legendHTML;
+            } catch (error) {
+                console.error('更新圓餅圖失敗:', error);
+            }
         }
 
         // ============================================
@@ -874,23 +959,35 @@
         }
 
         // ============================================
-        // 初始化
+        // 標籤切換功能
         // ============================================
-        document.addEventListener('DOMContentLoaded', () => {
-            // 設置默認日期
-            const today = new Date().toISOString().split('T')[0];
-            document.getElementById('expense-date').value = today;
-            
-            // 設置默認標籤樣式（預設顯示支出表單）
-            switchTab('expense');
-            
-            // 載入數據
-            loadTotalAssets();
-            updateMonthlySummaryAndList();
-            updateExpenseChart();
-            
-            console.log('✓ 記帳本已啟動 (本地版本)');
-        });
+        window.switchTab = function(tab) {
+            const expenseForm = document.getElementById('form-expense');
+            const installmentForm = document.getElementById('form-installment');
+            const expenseTab = document.getElementById('tab-expense');
+            const installmentTab = document.getElementById('tab-installment');
+
+            if (tab === 'expense') {
+                expenseForm.classList.remove('hidden');
+                installmentForm.classList.add('hidden');
+                expenseTab.classList.add('bg-teal-500', 'text-white');
+                expenseTab.classList.remove('bg-gray-100', 'text-gray-600');
+                installmentTab.classList.add('bg-gray-100', 'text-gray-600');
+                installmentTab.classList.remove('bg-teal-500', 'text-white');
+            } else {
+                expenseForm.classList.add('hidden');
+                installmentForm.classList.remove('hidden');
+                installmentTab.classList.add('bg-teal-500', 'text-white');
+                installmentTab.classList.remove('bg-gray-100', 'text-gray-600');
+                expenseTab.classList.add('bg-gray-100', 'text-gray-600');
+                expenseTab.classList.remove('bg-teal-500', 'text-white');
+            }
+        };
+
+        // ============================================
+        // 啟動應用程式
+        // ============================================
+        document.addEventListener('DOMContentLoaded', initializeApp);
     </script>
 </body>
 </html>
