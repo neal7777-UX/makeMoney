@@ -124,20 +124,63 @@
             <h3 class="text-2xl font-bold text-teal-800 mb-6">編輯交易</h3>
             
             <div class="space-y-4">
-                <!-- 金额输入 -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">金額</label>
-                    <input 
-                        type="number" 
-                        id="edit-amount" 
-                        placeholder="輸入金額"
-                        class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
-                        min="0"
-                        step="1"
-                    >
+                <!-- 日常支出表单 -->
+                <div id="edit-expense-fields">
+                    <!-- 金额输入 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">金額</label>
+                        <input 
+                            type="number" 
+                            id="edit-amount" 
+                            placeholder="輸入金額"
+                            class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                            min="0"
+                            step="1"
+                        >
+                    </div>
                 </div>
 
-                <!-- 类别下拉选单 -->
+                <!-- 分期计划表单 -->
+                <div id="edit-installment-fields" class="hidden">
+                    <!-- 总额输入 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">總額</label>
+                        <input 
+                            type="number" 
+                            id="edit-total-amount" 
+                            placeholder="輸入總額"
+                            class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                            min="0"
+                            step="1"
+                        >
+                    </div>
+
+                    <!-- 期数输入 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">期數</label>
+                        <input 
+                            type="number" 
+                            id="edit-periods" 
+                            placeholder="分幾期"
+                            class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                            min="1"
+                            step="1"
+                        >
+                    </div>
+
+                    <!-- 开始月份输入 -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">開始月份</label>
+                        <input 
+                            type="month" 
+                            id="edit-start-month" 
+                            class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none cursor-pointer"
+                            onclick="this.showPicker()"
+                        >
+                    </div>
+                </div>
+
+                <!-- 类别下拉选单（两种表单共用） -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">類別</label>
                     <select 
@@ -1324,17 +1367,40 @@
         let editingTransaction = null;
 
         // 打开编辑模态框
-        window.editTransaction = function(id, type, currentAmount, currentCategory) {
+        window.editTransaction = function(id, type, currentAmount, currentCategory, periods, startMonth) {
             // 保存当前编辑的交易信息
             editingTransaction = {
                 id: id,
                 type: type,
                 currentAmount: currentAmount,
-                currentCategory: currentCategory
+                currentCategory: currentCategory,
+                periods: periods || 0,
+                startMonth: startMonth || ''
             };
 
-            // 填充表单
-            document.getElementById('edit-amount').value = currentAmount;
+            // 根据类型显示/隐藏表单字段
+            const expenseFields = document.getElementById('edit-expense-fields');
+            const installmentFields = document.getElementById('edit-installment-fields');
+
+            if (type === 'installment') {
+                // 显示分期表单
+                expenseFields.classList.add('hidden');
+                installmentFields.classList.remove('hidden');
+                
+                // 填充分期表单
+                document.getElementById('edit-total-amount').value = currentAmount;
+                document.getElementById('edit-periods').value = periods;
+                document.getElementById('edit-start-month').value = startMonth;
+            } else {
+                // 显示日常支出表单
+                expenseFields.classList.remove('hidden');
+                installmentFields.classList.add('hidden');
+                
+                // 填充支出表单
+                document.getElementById('edit-amount').value = currentAmount;
+            }
+
+            // 填充类别（两种表单共用）
             document.getElementById('edit-category').value = currentCategory;
 
             // 显示模态框
@@ -1345,26 +1411,32 @@
         window.cancelEdit = function() {
             document.getElementById('edit-modal').classList.add('hidden');
             editingTransaction = null;
+            
+            // 清空所有表单字段
             document.getElementById('edit-amount').value = '';
+            document.getElementById('edit-total-amount').value = '';
+            document.getElementById('edit-periods').value = '';
+            document.getElementById('edit-start-month').value = '';
         };
 
         // 确认编辑
         window.confirmEdit = async function() {
             if (!editingTransaction) return;
 
-            const amount = Number(document.getElementById('edit-amount').value);
+            const { id, type, currentAmount } = editingTransaction;
             const newCategory = document.getElementById('edit-category').value;
-
-            if (isNaN(amount) || amount <= 0) {
-                showNotification('請輸入有效的金額', 'error');
-                return;
-            }
+            const table = type === 'installment' ? 'installments' : 'expenses';
 
             try {
-                const { id, type, currentAmount } = editingTransaction;
-                const table = type === 'installment' ? 'installments' : 'expenses';
-                
                 if (type === 'expense') {
+                    // 日常支出编辑
+                    const amount = Number(document.getElementById('edit-amount').value);
+
+                    if (isNaN(amount) || amount <= 0) {
+                        showNotification('請輸入有效的金額', 'error');
+                        return;
+                    }
+
                     const { error } = await supabaseClient
                         .from(table)
                         .update({
@@ -1396,23 +1468,35 @@
                             onConflict: 'user_id'
                         });
                 } else {
-                    // 分期的话更新 total_amount 和 monthly_amount
-                    const { data: installmentData } = await supabaseClient
-                        .from('installments')
-                        .select('num_months, total_amount')
-                        .eq('id', id)
-                        .eq('user_id', currentUser.id)
-                        .single();
-                    
-                    if (!installmentData) throw new Error('找不到分期計畫');
-                    
-                    const monthlyAmount = amount / installmentData.num_months;
+                    // 分期计划编辑
+                    const totalAmount = Number(document.getElementById('edit-total-amount').value);
+                    const periods = Number(document.getElementById('edit-periods').value);
+                    const startMonth = document.getElementById('edit-start-month').value;
+
+                    if (isNaN(totalAmount) || totalAmount <= 0) {
+                        showNotification('請輸入有效的總額', 'error');
+                        return;
+                    }
+
+                    if (isNaN(periods) || periods < 1) {
+                        showNotification('期數至少為 1', 'error');
+                        return;
+                    }
+
+                    if (!startMonth) {
+                        showNotification('請選擇開始月份', 'error');
+                        return;
+                    }
+
+                    const monthlyPayment = totalAmount / periods;
                     
                     const { error } = await supabaseClient
                         .from(table)
                         .update({
-                            total_amount: amount,
-                            monthly_amount: monthlyAmount,
+                            total_amount: totalAmount,
+                            periods: periods,
+                            start_month: startMonth,
+                            monthly_payment: monthlyPayment,
                             category: newCategory
                         })
                         .eq('id', id)
@@ -1421,7 +1505,7 @@
                     if (error) throw error;
 
                     // 更新总资产（调整差额）
-                    const difference = Number(installmentData.total_amount) - amount;
+                    const difference = Number(currentAmount) - totalAmount;
                     const { data: assetsData } = await supabaseClient
                         .from('assets')
                         .select('total_assets')
@@ -1444,7 +1528,7 @@
                 // 关闭模态框
                 document.getElementById('edit-modal').classList.add('hidden');
                 editingTransaction = null;
-                document.getElementById('edit-amount').value = '';
+                cancelEdit(); // 清空表单
 
                 showNotification('交易已更新', 'success');
                 
@@ -1481,10 +1565,12 @@
                 const typeBadgeColor = tx.type === 'installment' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700';
                 
                 // 编辑模式下显示编辑和删除按钮
+                const periods = tx.periods || 0;
+                const startMonth = tx.start_month || '';
                 const editButtons = isEditMode ? `
                     <div class="flex gap-2 mt-2">
                         <button 
-                            onclick="editTransaction('${tx.id}', '${tx.type}', ${tx.amount}, '${tx.category}')"
+                            onclick="editTransaction('${tx.id}', '${tx.type}', ${tx.amount}, '${tx.category}', ${periods}, '${startMonth}')"
                             class="flex-1 px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
                         >
                             編輯
