@@ -93,6 +93,23 @@
             max-width: 100%;
             overflow: hidden;
         }
+        
+        /* 强制所有元素不溢出 */
+        input, select, textarea, button {
+            max-width: 100%;
+        }
+        
+        /* 标题响应式 */
+        h1 {
+            word-break: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        /* 主容器不溢出 */
+        #main-content {
+            max-width: 100%;
+            overflow-x: hidden;
+        }
     </style>
 </head>
 <body class="p-3 sm:p-4 md:p-8">
@@ -112,10 +129,10 @@
     <!-- 主要內容 -->
     <div id="main-content" class="hidden max-w-7xl mx-auto">
         <!-- 標題 -->
-        <header class="text-center mb-8">
-            <h1 class="text-4xl md:text-5xl font-bold text-teal-800 mb-2">💰 休閒風個人記帳本</h1>
-            <p class="text-teal-600">輕鬆管理您的財務，追蹤每一筆支出</p>
-            <p class="text-sm text-teal-500 mt-2">☁️ Supabase 雲端版 - 數據自動同步到雲端</p>
+        <header class="text-center mb-6 sm:mb-8">
+            <h1 class="text-2xl sm:text-3xl md:text-5xl font-bold text-teal-800 mb-2">💰 休閒風個人記帳本</h1>
+            <p class="text-sm sm:text-base text-teal-600">輕鬆管理您的財務，追蹤每一筆支出</p>
+            <p class="text-xs sm:text-sm text-teal-500 mt-2">☁️ Supabase 雲端版</p>
         </header>
 
         <!-- 響應式佈局 -->
@@ -129,24 +146,40 @@
                             <span>💎</span>
                             <span>總資產</span>
                         </h2>
-                        <div class="flex items-center gap-2">
+                        <!-- 编辑按钮 -->
+                        <button 
+                            id="edit-assets-btn"
+                            onclick="toggleEditAssets()"
+                            class="px-3 py-1 text-sm bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors"
+                        >
+                            ✏️ 編輯
+                        </button>
+                        <!-- 编辑区域（默认隐藏） -->
+                        <div id="edit-assets-section" class="hidden flex items-center gap-2">
                             <input 
                                 type="number" 
                                 id="assets-input" 
                                 placeholder="金額"
-                                class="input-field w-24 px-2 py-1 text-sm rounded-lg border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                                class="input-field w-20 sm:w-24 px-2 py-1 text-sm rounded-lg border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
                             >
                             <button 
                                 onclick="updateTotalAssets()"
-                                class="px-3 py-1 text-sm bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors"
+                                class="px-2 sm:px-3 py-1 text-sm bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors whitespace-nowrap"
                                 title="覆蓋設定總資產"
                             >
                                 設定
                             </button>
+                            <button 
+                                onclick="toggleEditAssets()"
+                                class="px-2 sm:px-3 py-1 text-sm bg-gray-400 hover:bg-gray-500 text-white rounded-lg transition-colors"
+                                title="取消"
+                            >
+                                ✕
+                            </button>
                         </div>
                     </div>
                     <div class="text-center mb-6">
-                        <p class="text-4xl font-bold text-teal-700" id="total-assets">$0</p>
+                        <p class="text-3xl sm:text-4xl font-bold text-teal-700" id="total-assets">$0</p>
                     </div>
                     <div class="space-y-3">
                         <input 
@@ -447,6 +480,24 @@
             }
         }
 
+        // 切换编辑总资产区域
+        window.toggleEditAssets = function() {
+            const editBtn = document.getElementById('edit-assets-btn');
+            const editSection = document.getElementById('edit-assets-section');
+            
+            if (editSection.classList.contains('hidden')) {
+                // 显示编辑区域
+                editSection.classList.remove('hidden');
+                editBtn.classList.add('hidden');
+            } else {
+                // 隐藏编辑区域
+                editSection.classList.add('hidden');
+                editBtn.classList.remove('hidden');
+                // 清空输入框
+                document.getElementById('assets-input').value = '';
+            }
+        };
+
         window.updateTotalAssets = async function() {
             const input = document.getElementById('assets-input');
             const newAssets = Number(input.value);
@@ -478,6 +529,8 @@
                 await loadTotalAssets();
                 showNotification('總資產已設定', 'success');
                 input.value = '';
+                // 关闭编辑区域
+                toggleEditAssets();
             } catch (error) {
                 console.error('設定總資產失敗:', error);
                 showNotification(`設定失敗: ${error.message}`, 'error');
