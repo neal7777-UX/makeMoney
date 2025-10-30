@@ -1369,8 +1369,7 @@
                         .from(table)
                         .update({
                             amount: amount,
-                            category: newCategory,
-                            updated_at: new Date().toISOString()
+                            category: newCategory
                         })
                         .eq('id', id)
                         .eq('user_id', currentUser.id);
@@ -1414,8 +1413,7 @@
                         .update({
                             total_amount: amount,
                             monthly_amount: monthlyAmount,
-                            category: newCategory,
-                            updated_at: new Date().toISOString()
+                            category: newCategory
                         })
                         .eq('id', id)
                         .eq('user_id', currentUser.id);
