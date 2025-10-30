@@ -792,9 +792,7 @@
         // 工具函數
         // ============================================
         function formatCurrency(amount) {
-            return new Intl.NumberFormat('zh-TW', {
-                style: 'currency',
-                currency: 'TWD',
+            return '$' + new Intl.NumberFormat('zh-TW', {
                 minimumFractionDigits: 0,
                 maximumFractionDigits: 0
             }).format(amount);
