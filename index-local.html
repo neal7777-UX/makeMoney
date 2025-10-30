@@ -14,6 +14,15 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
         
+        * {
+            box-sizing: border-box;
+        }
+        
+        html, body {
+            overflow-x: hidden;
+            width: 100%;
+        }
+        
         body {
             font-family: 'Noto Sans TC', sans-serif;
             background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 50%, #80cbc4 100%);
@@ -38,6 +47,7 @@
 
         .input-field {
             transition: all 0.3s ease;
+            max-width: 100%;
         }
 
         .input-field:focus {
@@ -67,9 +77,22 @@
         .scroll-container::-webkit-scrollbar-thumb:hover {
             background: #5a8585;
         }
+        
+        /* 修复手机上的日期输入框溢出 */
+        input[type="date"],
+        input[type="month"] {
+            min-width: 0;
+            flex-shrink: 1;
+        }
+        
+        /* 确保所有内容不会溢出 */
+        .glass-card {
+            max-width: 100%;
+            overflow: hidden;
+        }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="p-3 sm:p-4 md:p-8">
     <!-- 通知組件 -->
     <div id="notification" class="hidden fixed top-4 right-4 px-6 py-3 rounded-2xl shadow-lg z-50">
         <p id="notification-message" class="font-medium"></p>
@@ -89,7 +112,7 @@
             <!-- 左側：資產總覽與月度總覽 -->
             <div class="space-y-6">
                 <!-- 總資產卡片 -->
-                <div class="glass-card rounded-3xl p-6 shadow-xl">
+                <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
                     <div class="flex items-start justify-between mb-4">
                         <h2 class="text-xl font-bold text-teal-800 flex items-center gap-2">
                             <span>💎</span>
@@ -131,7 +154,7 @@
                 </div>
 
                 <!-- 本月支出預覽 -->
-                <div class="glass-card rounded-3xl p-6 shadow-xl">
+                <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
                     <h2 class="text-xl font-bold text-teal-800 mb-4 flex items-center gap-2">
                         <span>📊</span>
                         <span>本月支出預覽</span>
@@ -153,7 +176,7 @@
                 </div>
 
                 <!-- 支出類型統計 -->
-                <div class="glass-card rounded-3xl p-6 shadow-xl">
+                <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
                     <h2 class="text-xl font-bold text-teal-800 mb-4 flex items-center gap-2">
                         <span>🥧</span>
                         <span>支出類型統計</span>
@@ -170,7 +193,7 @@
             <!-- 右側：操作區與交易紀錄 -->
             <div class="space-y-6">
                 <!-- 操作區：新增支出與分期 -->
-                <div class="glass-card rounded-3xl p-6 shadow-xl">
+                <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
                     <!-- 標籤切換 -->
                     <div class="flex gap-2 mb-6">
                         <button 
@@ -312,7 +335,7 @@
                 </div>
 
                 <!-- 近期交易紀錄 -->
-                <div class="glass-card rounded-3xl p-6 shadow-xl">
+                <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
                     <h2 class="text-xl font-bold text-teal-800 mb-4 flex items-center gap-2">
                         <span>📜</span>
                         <span>近期交易紀錄</span>
