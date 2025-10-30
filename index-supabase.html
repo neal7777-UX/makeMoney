@@ -118,6 +118,59 @@
         <p id="notification-message" class="font-medium"></p>
     </div>
 
+    <!-- 編輯交易模態框 -->
+    <div id="edit-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onclick="if(event.target === this) cancelEdit()">
+        <div class="glass-card rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl">
+            <h3 class="text-2xl font-bold text-teal-800 mb-6">編輯交易</h3>
+            
+            <div class="space-y-4">
+                <!-- 金额输入 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">金額</label>
+                    <input 
+                        type="number" 
+                        id="edit-amount" 
+                        placeholder="輸入金額"
+                        class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                        min="0"
+                        step="1"
+                    >
+                </div>
+
+                <!-- 类别下拉选单 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">類別</label>
+                    <select 
+                        id="edit-category"
+                        class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                    >
+                        <option value="餐飲">🍽️ 餐飲</option>
+                        <option value="交通">🚗 交通</option>
+                        <option value="娛樂">🎮 娛樂</option>
+                        <option value="購物">🛍️ 購物</option>
+                        <option value="其他">📝 其他</option>
+                    </select>
+                </div>
+
+                <!-- 按钮组 -->
+                <div class="flex gap-3 mt-6">
+                    <button 
+                        onclick="cancelEdit()"
+                        class="flex-1 py-3 px-4 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-2xl font-medium transition-colors"
+                    >
+                        取消
+                    </button>
+                    <button 
+                        onclick="confirmEdit()"
+                        class="flex-1 btn-primary py-3 px-4 rounded-2xl text-white font-medium"
+                    >
+                        確認
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- 載入中狀態 -->
     <div id="loading" class="flex items-center justify-center min-h-screen">
         <div class="text-center">
@@ -1267,27 +1320,48 @@
             }
         };
 
-        // 编辑交易
-        window.editTransaction = async function(id, type, currentAmount, currentCategory) {
-            const newAmount = prompt('輸入新的金額:', currentAmount);
-            if (newAmount === null) return;
-            
-            const amount = Number(newAmount);
+        // 编辑交易的全局变量
+        let editingTransaction = null;
+
+        // 打开编辑模态框
+        window.editTransaction = function(id, type, currentAmount, currentCategory) {
+            // 保存当前编辑的交易信息
+            editingTransaction = {
+                id: id,
+                type: type,
+                currentAmount: currentAmount,
+                currentCategory: currentCategory
+            };
+
+            // 填充表单
+            document.getElementById('edit-amount').value = currentAmount;
+            document.getElementById('edit-category').value = currentCategory;
+
+            // 显示模态框
+            document.getElementById('edit-modal').classList.remove('hidden');
+        };
+
+        // 取消编辑
+        window.cancelEdit = function() {
+            document.getElementById('edit-modal').classList.add('hidden');
+            editingTransaction = null;
+            document.getElementById('edit-amount').value = '';
+        };
+
+        // 确认编辑
+        window.confirmEdit = async function() {
+            if (!editingTransaction) return;
+
+            const amount = Number(document.getElementById('edit-amount').value);
+            const newCategory = document.getElementById('edit-category').value;
+
             if (isNaN(amount) || amount <= 0) {
                 showNotification('請輸入有效的金額', 'error');
                 return;
             }
 
-            const categories = ['餐飲', '交通', '娛樂', '購物', '其他'];
-            const newCategory = prompt('輸入新的類別 (餐飲/交通/娛樂/購物/其他):', currentCategory);
-            if (newCategory === null) return;
-            
-            if (!categories.includes(newCategory)) {
-                showNotification('無效的類別', 'error');
-                return;
-            }
-
             try {
+                const { id, type, currentAmount } = editingTransaction;
                 const table = type === 'installment' ? 'installments' : 'expenses';
                 
                 if (type === 'expense') {
@@ -1328,6 +1402,7 @@
                         .from('installments')
                         .select('num_months, total_amount')
                         .eq('id', id)
+                        .eq('user_id', currentUser.id)
                         .single();
                     
                     if (!installmentData) throw new Error('找不到分期計畫');
@@ -1367,6 +1442,11 @@
                             onConflict: 'user_id'
                         });
                 }
+
+                // 关闭模态框
+                document.getElementById('edit-modal').classList.add('hidden');
+                editingTransaction = null;
+                document.getElementById('edit-amount').value = '';
 
                 showNotification('交易已更新', 'success');
                 
