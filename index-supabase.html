@@ -526,10 +526,27 @@
 
                 <!-- 近期交易紀錄 -->
                 <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
-                    <h2 class="text-xl font-bold text-teal-800 mb-4 flex items-center gap-2">
-                        <span>📜</span>
-                        <span>近期交易紀錄</span>
-                    </h2>
+                    <div class="flex items-start justify-between mb-4">
+                        <h2 class="text-xl font-bold text-teal-800 flex items-center gap-2">
+                            <span>📜</span>
+                            <span>近期交易紀錄</span>
+                        </h2>
+                        <!-- 编辑模式切换按钮 -->
+                        <button 
+                            id="edit-mode-btn"
+                            onclick="toggleEditMode()"
+                            class="px-3 py-1 text-sm bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors"
+                        >
+                            ✏️ 編輯
+                        </button>
+                        <button 
+                            id="done-edit-btn"
+                            onclick="toggleEditMode()"
+                            class="hidden px-3 py-1 text-sm bg-gray-400 hover:bg-gray-500 text-white rounded-lg transition-colors"
+                        >
+                            ✓ 完成
+                        </button>
+                    </div>
                     <div id="transaction-list" class="scroll-container space-y-3">
                         <!-- 交易紀錄將動態載入 -->
                         <div class="text-center text-gray-400 py-8">
@@ -1156,6 +1173,213 @@
             return current >= start && current < end;
         }
 
+        // 全局编辑模式状态
+        let isEditMode = false;
+
+        // 切换编辑模式
+        window.toggleEditMode = function() {
+            isEditMode = !isEditMode;
+            const editBtn = document.getElementById('edit-mode-btn');
+            const doneBtn = document.getElementById('done-edit-btn');
+            
+            if (isEditMode) {
+                editBtn.classList.add('hidden');
+                doneBtn.classList.remove('hidden');
+            } else {
+                editBtn.classList.remove('hidden');
+                doneBtn.classList.add('hidden');
+            }
+            
+            // 重新渲染交易列表
+            updateMonthlySummaryAndList();
+        };
+
+        // 删除交易
+        window.deleteTransaction = async function(id, type) {
+            if (!confirm('確定要刪除這筆交易嗎？')) {
+                return;
+            }
+
+            try {
+                let refundAmount = 0;
+                
+                // 先获取要删除的数据（用于退还资产）
+                if (type === 'installment') {
+                    const { data: installmentData } = await supabaseClient
+                        .from('installments')
+                        .select('total_amount')
+                        .eq('id', id)
+                        .eq('user_id', currentUser.id)
+                        .single();
+                    
+                    refundAmount = installmentData ? Number(installmentData.total_amount || 0) : 0;
+                } else {
+                    const { data: expenseData } = await supabaseClient
+                        .from('expenses')
+                        .select('amount')
+                        .eq('id', id)
+                        .eq('user_id', currentUser.id)
+                        .single();
+                    
+                    refundAmount = expenseData ? Number(expenseData.amount || 0) : 0;
+                }
+
+                // 删除交易
+                const table = type === 'installment' ? 'installments' : 'expenses';
+                const { error } = await supabaseClient
+                    .from(table)
+                    .delete()
+                    .eq('id', id)
+                    .eq('user_id', currentUser.id);
+
+                if (error) throw error;
+
+                // 退还资产
+                if (refundAmount > 0) {
+                    const { data: assetsData } = await supabaseClient
+                        .from('assets')
+                        .select('total_assets')
+                        .eq('user_id', currentUser.id)
+                        .maybeSingle();
+                    
+                    const currentAssets = assetsData ? Number(assetsData.total_assets || 0) : 0;
+                    
+                    await supabaseClient
+                        .from('assets')
+                        .upsert({
+                            user_id: currentUser.id,
+                            total_assets: currentAssets + refundAmount,
+                            updated_at: new Date().toISOString()
+                        }, {
+                            onConflict: 'user_id'
+                        });
+                }
+
+                showNotification('交易已刪除，已退還 ' + formatCurrency(refundAmount), 'success');
+
+                // 重新加载数据
+                await loadTotalAssets();
+                await updateMonthlySummaryAndList();
+                await updateExpenseChart();
+            } catch (error) {
+                console.error('刪除交易失敗:', error);
+                showNotification('刪除失敗: ' + error.message, 'error');
+            }
+        };
+
+        // 编辑交易
+        window.editTransaction = async function(id, type, currentAmount, currentCategory) {
+            const newAmount = prompt('輸入新的金額:', currentAmount);
+            if (newAmount === null) return;
+            
+            const amount = Number(newAmount);
+            if (isNaN(amount) || amount <= 0) {
+                showNotification('請輸入有效的金額', 'error');
+                return;
+            }
+
+            const categories = ['餐飲', '交通', '娛樂', '購物', '其他'];
+            const newCategory = prompt('輸入新的類別 (餐飲/交通/娛樂/購物/其他):', currentCategory);
+            if (newCategory === null) return;
+            
+            if (!categories.includes(newCategory)) {
+                showNotification('無效的類別', 'error');
+                return;
+            }
+
+            try {
+                const table = type === 'installment' ? 'installments' : 'expenses';
+                
+                if (type === 'expense') {
+                    const { error } = await supabaseClient
+                        .from(table)
+                        .update({
+                            amount: amount,
+                            category: newCategory,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', id)
+                        .eq('user_id', currentUser.id);
+
+                    if (error) throw error;
+
+                    // 更新总资产（调整差额）
+                    const difference = Number(currentAmount) - amount;
+                    const { data: assetsData } = await supabaseClient
+                        .from('assets')
+                        .select('total_assets')
+                        .eq('user_id', currentUser.id)
+                        .maybeSingle();
+                    
+                    const currentAssets = assetsData ? Number(assetsData.total_assets || 0) : 0;
+                    
+                    await supabaseClient
+                        .from('assets')
+                        .upsert({
+                            user_id: currentUser.id,
+                            total_assets: Math.max(0, currentAssets + difference),
+                            updated_at: new Date().toISOString()
+                        }, {
+                            onConflict: 'user_id'
+                        });
+                } else {
+                    // 分期的话更新 total_amount 和 monthly_amount
+                    const { data: installmentData } = await supabaseClient
+                        .from('installments')
+                        .select('num_months, total_amount')
+                        .eq('id', id)
+                        .single();
+                    
+                    if (!installmentData) throw new Error('找不到分期計畫');
+                    
+                    const monthlyAmount = amount / installmentData.num_months;
+                    
+                    const { error } = await supabaseClient
+                        .from(table)
+                        .update({
+                            total_amount: amount,
+                            monthly_amount: monthlyAmount,
+                            category: newCategory,
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', id)
+                        .eq('user_id', currentUser.id);
+
+                    if (error) throw error;
+
+                    // 更新总资产（调整差额）
+                    const difference = Number(installmentData.total_amount) - amount;
+                    const { data: assetsData } = await supabaseClient
+                        .from('assets')
+                        .select('total_assets')
+                        .eq('user_id', currentUser.id)
+                        .maybeSingle();
+                    
+                    const currentAssets = assetsData ? Number(assetsData.total_assets || 0) : 0;
+                    
+                    await supabaseClient
+                        .from('assets')
+                        .upsert({
+                            user_id: currentUser.id,
+                            total_assets: Math.max(0, currentAssets + difference),
+                            updated_at: new Date().toISOString()
+                        }, {
+                            onConflict: 'user_id'
+                        });
+                }
+
+                showNotification('交易已更新', 'success');
+                
+                // 重新加载数据
+                await loadTotalAssets();
+                await updateMonthlySummaryAndList();
+                await updateExpenseChart();
+            } catch (error) {
+                console.error('更新交易失敗:', error);
+                showNotification('更新失敗: ' + error.message, 'error');
+            }
+        };
+
         // 渲染交易清單
         function renderTransactionList(transactions) {
             const listContainer = document.getElementById('transaction-list');
@@ -1178,6 +1402,24 @@
                 const typeLabel = tx.type === 'installment' ? '分期' : '支出';
                 const typeBadgeColor = tx.type === 'installment' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700';
                 
+                // 编辑模式下显示编辑和删除按钮
+                const editButtons = isEditMode ? `
+                    <div class="flex gap-2 mt-2">
+                        <button 
+                            onclick="editTransaction('${tx.id}', '${tx.type}', ${tx.amount}, '${tx.category}')"
+                            class="flex-1 px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                        >
+                            編輯
+                        </button>
+                        <button 
+                            onclick="deleteTransaction('${tx.id}', '${tx.type}')"
+                            class="flex-1 px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+                        >
+                            刪除
+                        </button>
+                    </div>
+                ` : '';
+                
                 return `
                     <div class="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
                         <div class="flex justify-between items-start">
@@ -1194,6 +1436,7 @@
                                 <p class="text-lg font-bold text-red-500">-${formatCurrency(tx.amount)}</p>
                             </div>
                         </div>
+                        ${editButtons}
                     </div>
                 `;
             }).join('');
@@ -1204,12 +1447,21 @@
         // ============================================
         async function updateExpenseChart() {
             try {
-                const { data: expenses, error } = await supabaseClient
+                // 获取日常支出
+                const { data: expenses, error: expenseError } = await supabaseClient
                     .from('expenses')
                     .select('category, amount')
                     .eq('user_id', currentUser.id);
 
-                if (error) throw error;
+                if (expenseError) throw expenseError;
+
+                // 获取分期计划
+                const { data: installments, error: installmentError } = await supabaseClient
+                    .from('installments')
+                    .select('category, total_amount')
+                    .eq('user_id', currentUser.id);
+
+                if (installmentError) throw installmentError;
 
                 const categoryStats = {};
                 const categoryColors = {
@@ -1227,9 +1479,21 @@
                     '其他': '📝'
                 };
 
+                // 统计日常支出
                 expenses?.forEach(expense => {
                     const category = expense.category;
                     const amount = Number(expense.amount || 0);
+                    
+                    if (!categoryStats[category]) {
+                        categoryStats[category] = 0;
+                    }
+                    categoryStats[category] += amount;
+                });
+
+                // 统计分期计划（使用总金额）
+                installments?.forEach(installment => {
+                    const category = installment.category;
+                    const amount = Number(installment.total_amount || 0);
                     
                     if (!categoryStats[category]) {
                         categoryStats[category] = 0;
