@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>休閒風個人記帳本 (本地版)</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background: linear-gradient(135deg, #e0f2f1 0%, #b2dfdb 50%, #80cbc4 100%);
+            min-height: 100vh;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #78a1a1 0%, #5a8585 100%);
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(120, 161, 161, 0.4);
+        }
+
+        .input-field {
+            transition: all 0.3s ease;
+        }
+
+        .input-field:focus {
+            transform: scale(1.02);
+            box-shadow: 0 0 0 3px rgba(120, 161, 161, 0.2);
+        }
+
+        .scroll-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .scroll-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .scroll-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .scroll-container::-webkit-scrollbar-thumb {
+            background: #78a1a1;
+            border-radius: 10px;
+        }
+
+        .scroll-container::-webkit-scrollbar-thumb:hover {
+            background: #5a8585;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <!-- 通知組件 -->
+    <div id="notification" class="hidden fixed top-4 right-4 px-6 py-3 rounded-2xl shadow-lg z-50">
+        <p id="notification-message" class="font-medium"></p>
+    </div>
+
+    <!-- 主要內容 -->
+    <div id="main-content" class="max-w-7xl mx-auto">
+        <!-- 標題 -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-teal-800 mb-2">💰 休閒風個人記帳本</h1>
+            <p class="text-teal-600">輕鬆管理您的財務，追蹤每一筆支出</p>
+            <p class="text-sm text-teal-500 mt-2">📱 本地版本 - 數據存儲在您的瀏覽器中</p>
+        </header>
+
+        <!-- 響應式佈局 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 左側：資產總覽與月度總覽 -->
+            <div class="space-y-6">
+                <!-- 總資產卡片 -->
+                <div class="glass-card rounded-3xl p-6 shadow-xl">
+                    <h2 class="text-xl font-bold text-teal-800 mb-4 flex items-center gap-2">
+                        <span>💎</span>
+                        <span>總資產</span>
+                    </h2>
+                    <div class="text-center mb-6">
+                        <p class="text-4xl font-bold text-teal-700" id="total-assets">$0</p>
+                    </div>
+                    <div class="space-y-3">
+                        <input 
+                            type="number" 
+                            id="assets-input" 
+                            placeholder="輸入新的總資產"
+                            class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                        >
+                        <button 
+                            onclick="updateTotalAssets()"
+                            class="btn-primary w-full py-3 rounded-2xl text-white font-medium"
+                        >
+                            更新總資產
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 本月支出預覽 -->
+                <div class="glass-card rounded-3xl p-6 shadow-xl">
+                    <h2 class="text-xl font-bold text-teal-800 mb-4 flex items-center gap-2">
+                        <span>📊</span>
+                        <span>本月支出預覽</span>
+                    </h2>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">一般支出</span>
+                            <span class="font-bold text-red-500" id="monthly-expenses">$0</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-600">分期攤提</span>
+                            <span class="font-bold text-purple-500" id="monthly-installments">$0</span>
+                        </div>
+                        <div class="border-t-2 border-teal-200 pt-3 flex justify-between items-center">
+                            <span class="text-lg font-bold text-teal-800">本月總計</span>
+                            <span class="text-2xl font-bold text-teal-700" id="monthly-total">$0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 支出類型統計 -->
+                <div class="glass-card rounded-3xl p-6 shadow-xl">
+                    <h2 class="text-xl font-bold text-teal-800 mb-4 flex items-center gap-2">
+                        <span>🥧</span>
+                        <span>支出類型統計</span>
+                    </h2>
+                    <div class="relative" style="height: 280px;">
+                        <canvas id="expense-chart"></canvas>
+                    </div>
+                    <div id="chart-legend" class="mt-4 space-y-2">
+                        <!-- 圖例將動態生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右側：操作區與交易紀錄 -->
+            <div class="space-y-6">
+                <!-- 操作區：新增支出與分期 -->
+                <div class="glass-card rounded-3xl p-6 shadow-xl">
+                    <!-- 標籤切換 -->
+                    <div class="flex gap-2 mb-6">
+                        <button 
+                            id="tab-expense"
+                            onclick="switchTab('expense')"
+                            class="flex-1 py-3 px-4 rounded-2xl font-medium transition-all"
+                        >
+                            📝 新增日常支出
+                        </button>
+                        <button 
+                            id="tab-installment"
+                            onclick="switchTab('installment')"
+                            class="flex-1 py-3 px-4 rounded-2xl font-medium transition-all"
+                        >
+                            💳 新增分期計畫
+                        </button>
+                    </div>
+
+                    <!-- 新增日常支出表單 -->
+                    <div id="form-expense" class="form-content">
+                        <form class="space-y-4" onsubmit="event.preventDefault(); addExpense();">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">日期</label>
+                                <input 
+                                    type="date" 
+                                    id="expense-date" 
+                                    required
+                                    class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">金額</label>
+                                <input 
+                                    type="number" 
+                                    id="expense-amount" 
+                                    placeholder="輸入金額"
+                                    required
+                                    min="0"
+                                    step="1"
+                                    class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">類別</label>
+                                <select 
+                                    id="expense-category"
+                                    required
+                                    class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                                >
+                                    <option value="餐飲">🍽️ 餐飲</option>
+                                    <option value="交通">🚗 交通</option>
+                                    <option value="娛樂">🎮 娛樂</option>
+                                    <option value="購物">🛍️ 購物</option>
+                                    <option value="其他">📝 其他</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">描述</label>
+                                <input 
+                                    type="text" 
+                                    id="expense-description" 
+                                    placeholder="項目描述（選填）"
+                                    class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                                >
+                            </div>
+                            <button 
+                                type="submit"
+                                class="btn-primary w-full py-3 rounded-2xl text-white font-medium"
+                            >
+                                新增支出
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- 新增分期計畫表單 -->
+                    <div id="form-installment" class="form-content hidden">
+                        <form class="space-y-4" onsubmit="event.preventDefault(); addInstallment();">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">總額</label>
+                                <input 
+                                    type="number" 
+                                    id="installment-total" 
+                                    placeholder="輸入總金額"
+                                    min="0"
+                                    step="1"
+                                    class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">期數</label>
+                                <input 
+                                    type="number" 
+                                    id="installment-periods" 
+                                    placeholder="分幾期"
+                                    min="1"
+                                    step="1"
+                                    class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">開始月份</label>
+                                <input 
+                                    type="month" 
+                                    id="installment-start" 
+                                    class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                                >
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">類別</label>
+                                <select 
+                                    id="installment-category"
+                                    class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                                >
+                                    <option value="餐飲">🍽️ 餐飲</option>
+                                    <option value="交通">🚗 交通</option>
+                                    <option value="娛樂">🎮 娛樂</option>
+                                    <option value="購物">🛍️ 購物</option>
+                                    <option value="其他">📝 其他</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">描述</label>
+                                <input 
+                                    type="text" 
+                                    id="installment-description" 
+                                    placeholder="項目描述（選填）"
+                                    class="input-field w-full px-4 py-3 rounded-2xl border-2 border-teal-200 focus:border-teal-400 focus:outline-none"
+                                >
+                            </div>
+                            <button 
+                                type="submit"
+                                class="btn-primary w-full py-3 rounded-2xl text-white font-medium"
+                            >
+                                新增分期計畫
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 近期交易紀錄 -->
+                <div class="glass-card rounded-3xl p-6 shadow-xl">
+                    <h2 class="text-xl font-bold text-teal-800 mb-4 flex items-center gap-2">
+                        <span>📜</span>
+                        <span>近期交易紀錄</span>
+                    </h2>
+                    <div id="transaction-list" class="scroll-container space-y-3">
+                        <!-- 交易紀錄將動態載入 -->
+                        <div class="text-center text-gray-400 py-8">
+                            <p>尚無交易紀錄</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 頁尾 -->
+        <footer class="text-center mt-12 text-teal-600">
+            <p class="text-sm">© 2025 休閒風個人記帳本 | 輕鬆管理，精彩生活 ✨</p>
+        </footer>
+    </div>
+
+    <script>
+        // ============================================
+        // 全域變數
+        // ============================================
+        let expenseChart = null; // 圓餅圖實例
+
+        // ============================================
+        // 標籤切換功能
+        // ============================================
+        function switchTab(tab) {
+            const expenseForm = document.getElementById('form-expense');
+            const installmentForm = document.getElementById('form-installment');
+            const expenseTab = document.getElementById('tab-expense');
+            const installmentTab = document.getElementById('tab-installment');
+
+            if (tab === 'expense') {
+                expenseForm.classList.remove('hidden');
+                installmentForm.classList.add('hidden');
+                expenseTab.classList.add('bg-teal-500', 'text-white');
+                expenseTab.classList.remove('bg-gray-100', 'text-gray-600');
+                installmentTab.classList.add('bg-gray-100', 'text-gray-600');
+                installmentTab.classList.remove('bg-teal-500', 'text-white');
+            } else {
+                expenseForm.classList.add('hidden');
+                installmentForm.classList.remove('hidden');
+                installmentTab.classList.add('bg-teal-500', 'text-white');
+                installmentTab.classList.remove('bg-gray-100', 'text-gray-600');
+                expenseTab.classList.add('bg-gray-100', 'text-gray-600');
+                expenseTab.classList.remove('bg-teal-500', 'text-white');
+            }
+        }
+
+        // ============================================
+        // 本地儲存管理 (使用 localStorage)
+        // ============================================
+        
+        class LocalStorage {
+            static getExpenses() {
+                const data = localStorage.getItem('expenses');
+                return data ? JSON.parse(data) : [];
+            }
+
+            static saveExpense(expense) {
+                const expenses = this.getExpenses();
+                expenses.push(expense);
+                localStorage.setItem('expenses', JSON.stringify(expenses));
+            }
+
+            static getInstallments() {
+                const data = localStorage.getItem('installments');
+                return data ? JSON.parse(data) : [];
+            }
+
+            static saveInstallment(installment) {
+                const installments = this.getInstallments();
+                installments.push(installment);
+                localStorage.setItem('installments', JSON.stringify(installments));
+            }
+
+            static getTotalAssets() {
+                const data = localStorage.getItem('totalAssets');
+                return data ? Number(data) : 0;
+            }
+
+            static setTotalAssets(amount) {
+                localStorage.setItem('totalAssets', amount.toString());
+            }
+        }
+
+        // ============================================
+        // 總資產管理
+        // ============================================
+        function loadTotalAssets() {
+            const totalAssets = LocalStorage.getTotalAssets();
+            document.getElementById('total-assets').textContent = formatCurrency(totalAssets);
+        }
+
+        function updateTotalAssets() {
+            const input = document.getElementById('assets-input');
+            const newAssets = Number(input.value);
+
+            if (isNaN(newAssets) || newAssets < 0) {
+                showNotification('請輸入有效的金額', 'error');
+                return;
+            }
+
+            LocalStorage.setTotalAssets(newAssets);
+            loadTotalAssets();
+            showNotification('總資產已更新', 'success');
+            input.value = '';
+        }
+
+        // ============================================
+        // 日常支出記錄
+        // ============================================
+        function addExpense() {
+            const date = document.getElementById('expense-date').value;
+            const amount = Number(document.getElementById('expense-amount').value);
+            const category = document.getElementById('expense-category').value;
+            const description = document.getElementById('expense-description').value;
+
+            if (!date || isNaN(amount) || amount <= 0 || !category) {
+                showNotification('請填寫所有必填欄位', 'error');
+                return;
+            }
+
+            const expense = {
+                id: Date.now().toString(),
+                date: date,
+                amount: amount,
+                category: category,
+                description: description || '',
+                timestamp: Date.now()
+            };
+
+            LocalStorage.saveExpense(expense);
+            
+            // 自動從總資產扣除支出金額
+            const currentAssets = LocalStorage.getTotalAssets();
+            const newAssets = currentAssets - amount;
+            LocalStorage.setTotalAssets(newAssets);
+            loadTotalAssets();
+            
+            showNotification(`支出已記錄，總資產已扣除 ${formatCurrency(amount)}`, 'success');
+            
+            // 清空表單
+            document.getElementById('expense-date').value = new Date().toISOString().split('T')[0];
+            document.getElementById('expense-amount').value = '';
+            document.getElementById('expense-category').value = '餐飲';
+            document.getElementById('expense-description').value = '';
+
+            // 更新顯示
+            updateMonthlySummaryAndList();
+            updateExpenseChart();
+        }
+
+        // ============================================
+        // 信用卡分期追蹤
+        // ============================================
+        function addInstallment() {
+            const totalAmount = Number(document.getElementById('installment-total').value);
+            const periods = Number(document.getElementById('installment-periods').value);
+            const startMonth = document.getElementById('installment-start').value;
+            const category = document.getElementById('installment-category').value;
+            const description = document.getElementById('installment-description').value;
+
+            if (isNaN(totalAmount) || totalAmount <= 0) {
+                showNotification('請輸入有效的總額', 'error');
+                return;
+            }
+            if (isNaN(periods) || periods <= 0 || !Number.isInteger(periods)) {
+                showNotification('請輸入有效的期數（正整數）', 'error');
+                return;
+            }
+            if (!startMonth || !category) {
+                showNotification('請填寫所有必填欄位', 'error');
+                return;
+            }
+
+            const monthlyPayment = totalAmount / periods;
+
+            const installment = {
+                id: Date.now().toString(),
+                totalAmount: totalAmount,
+                periods: periods,
+                startMonth: startMonth,
+                category: category,
+                description: description || '',
+                monthlyPayment: monthlyPayment,
+                timestamp: Date.now()
+            };
+
+            console.log('📝 新增分期計畫:', installment);
+            LocalStorage.saveInstallment(installment);
+            
+            // 自動從總資產扣除分期總額（因為這筆錢已經花了）
+            const currentAssets = LocalStorage.getTotalAssets();
+            const newAssets = currentAssets - totalAmount;
+            LocalStorage.setTotalAssets(newAssets);
+            loadTotalAssets();
+            
+            // 驗證保存
+            const savedInstallments = LocalStorage.getInstallments();
+            console.log('💾 已保存的分期計畫:', savedInstallments);
+            
+            showNotification(`分期計畫已新增，總資產已扣除 ${formatCurrency(totalAmount)}`, 'success');
+            
+            // 清空表單
+            document.getElementById('installment-total').value = '';
+            document.getElementById('installment-periods').value = '';
+            document.getElementById('installment-start').value = '';
+            document.getElementById('installment-category').value = '餐飲';
+            document.getElementById('installment-description').value = '';
+
+            // 更新顯示
+            console.log('🔄 開始更新顯示...');
+            updateMonthlySummaryAndList();
+        }
+
+        // ============================================
+        // 月度總覽與交易清單
+        // ============================================
+        function updateMonthlySummaryAndList() {
+            const currentMonth = new Date().toISOString().slice(0, 7);
+            
+            let monthlyExpenses = 0;
+            let monthlyInstallments = 0;
+            const transactionList = [];
+
+            // 處理日常支出
+            const expenses = LocalStorage.getExpenses();
+            expenses.forEach(expense => {
+                const expenseMonth = expense.date.slice(0, 7);
+                const amount = Number(expense.amount || 0);
+                
+                if (expenseMonth === currentMonth) {
+                    monthlyExpenses += amount;
+                }
+                
+                transactionList.push({
+                    id: expense.id,
+                    type: 'expense',
+                    date: expense.date,
+                    amount: amount,
+                    category: expense.category,
+                    description: expense.description,
+                    timestamp: expense.timestamp
+                });
+            });
+
+            // 處理分期計畫
+            const installments = LocalStorage.getInstallments();
+            console.log(`💳 處理分期計畫 (當前月份: ${currentMonth}):`, installments);
+            
+            installments.forEach((installment, index) => {
+                const totalAmount = Number(installment.totalAmount || 0);
+                const periods = Number(installment.periods || 1);
+                const startMonth = installment.startMonth;
+                const monthlyPayment = Number(installment.monthlyPayment || (totalAmount / periods));
+                
+                console.log(`  分期 #${index + 1}:`, {
+                    totalAmount,
+                    periods,
+                    startMonth,
+                    monthlyPayment
+                });
+                
+                if (isMonthInInstallmentRange(currentMonth, startMonth, periods)) {
+                    console.log(`  ✅ 分期 #${index + 1} 在範圍內，加入本月支出`);
+                    monthlyInstallments += monthlyPayment;
+                    
+                    transactionList.push({
+                        id: installment.id,
+                        type: 'installment',
+                        date: currentMonth + '-01',
+                        amount: monthlyPayment,
+                        category: installment.category,
+                        description: `${installment.description} (分期 ${periods} 期)`,
+                        timestamp: installment.timestamp,
+                        installmentInfo: {
+                            totalAmount: totalAmount,
+                            periods: periods,
+                            startMonth: startMonth
+                        }
+                    });
+                } else {
+                    console.log(`  ❌ 分期 #${index + 1} 不在範圍內`);
+                }
+            });
+            
+            console.log(`💰 本月分期攤提總額: ${monthlyInstallments}`);
+
+            // 更新儀表板
+            document.getElementById('monthly-expenses').textContent = formatCurrency(monthlyExpenses);
+            document.getElementById('monthly-installments').textContent = formatCurrency(monthlyInstallments);
+            document.getElementById('monthly-total').textContent = formatCurrency(monthlyExpenses + monthlyInstallments);
+            
+            // 渲染交易清單
+            renderTransactionList(transactionList);
+        }
+
+        // 檢查月份是否在分期範圍內
+        function isMonthInInstallmentRange(currentMonth, startMonth, periods) {
+            const current = new Date(currentMonth + '-01');
+            const start = new Date(startMonth + '-01');
+            const end = new Date(start);
+            end.setMonth(end.getMonth() + periods);
+            
+            const isInRange = current >= start && current < end;
+            
+            console.log(`📅 檢查分期範圍:`, {
+                currentMonth,
+                startMonth,
+                periods,
+                current: current.toISOString(),
+                start: start.toISOString(),
+                end: end.toISOString(),
+                isInRange
+            });
+            
+            return isInRange;
+        }
+
+        // 渲染交易清單
+        function renderTransactionList(transactions) {
+            const listContainer = document.getElementById('transaction-list');
+            
+            const sortedTransactions = transactions
+                .sort((a, b) => b.timestamp - a.timestamp)
+                .slice(0, 30);
+
+            if (sortedTransactions.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="text-center text-gray-400 py-8">
+                        <p>尚無交易紀錄</p>
+                    </div>
+                `;
+                return;
+            }
+
+            listContainer.innerHTML = sortedTransactions.map(tx => {
+                const categoryIcon = getCategoryIcon(tx.category);
+                const typeLabel = tx.type === 'installment' ? '分期' : '支出';
+                const typeBadgeColor = tx.type === 'installment' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700';
+                
+                return `
+                    <div class="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-2xl">${categoryIcon}</span>
+                                    <span class="text-sm font-medium text-gray-600">${tx.category}</span>
+                                    <span class="text-xs px-2 py-1 rounded-full ${typeBadgeColor}">${typeLabel}</span>
+                                </div>
+                                <p class="text-gray-700 font-medium">${tx.description || '無描述'}</p>
+                                <p class="text-xs text-gray-400 mt-1">${tx.date}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-lg font-bold text-red-500">-${formatCurrency(tx.amount)}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ============================================
+        // 圓餅圖功能
+        // ============================================
+        function updateExpenseChart() {
+            const expenses = LocalStorage.getExpenses();
+            const categoryStats = {};
+            const categoryColors = {
+                '餐飲': '#FF6384',
+                '交通': '#36A2EB',
+                '娛樂': '#FFCE56',
+                '購物': '#4BC0C0',
+                '其他': '#9966FF'
+            };
+            const categoryIcons = {
+                '餐飲': '🍽️',
+                '交通': '🚗',
+                '娛樂': '🎮',
+                '購物': '🛍️',
+                '其他': '📝'
+            };
+
+            // 統計各類別的支出
+            expenses.forEach(expense => {
+                const category = expense.category;
+                const amount = Number(expense.amount || 0);
+                
+                if (!categoryStats[category]) {
+                    categoryStats[category] = 0;
+                }
+                categoryStats[category] += amount;
+            });
+
+            // 準備圖表數據
+            const labels = Object.keys(categoryStats);
+            const data = Object.values(categoryStats);
+            const backgroundColor = labels.map(label => categoryColors[label] || '#999');
+            
+            // 計算總支出
+            const totalExpense = data.reduce((sum, val) => sum + val, 0);
+
+            // 如果沒有數據，顯示提示
+            if (totalExpense === 0) {
+                const canvas = document.getElementById('expense-chart');
+                const ctx = canvas.getContext('2d');
+                
+                // 清除現有圖表
+                if (expenseChart) {
+                    expenseChart.destroy();
+                    expenseChart = null;
+                }
+                
+                // 顯示無數據提示
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.font = '16px "Noto Sans TC"';
+                ctx.fillStyle = '#9CA3AF';
+                ctx.textAlign = 'center';
+                ctx.fillText('尚無支出數據', canvas.width / 2, canvas.height / 2);
+                
+                // 清空圖例
+                document.getElementById('chart-legend').innerHTML = '';
+                return;
+            }
+
+            // 銷毀舊圖表
+            if (expenseChart) {
+                expenseChart.destroy();
+            }
+
+            // 創建新圖表
+            const ctx = document.getElementById('expense-chart').getContext('2d');
+            expenseChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: backgroundColor,
+                        borderWidth: 2,
+                        borderColor: '#fff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false // 使用自定義圖例
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.parsed || 0;
+                                    const percentage = ((value / totalExpense) * 100).toFixed(1);
+                                    return `${label}: ${formatCurrency(value)} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 生成自定義圖例
+            let legendHTML = '';
+            labels.forEach((label, index) => {
+                const value = data[index];
+                const percentage = ((value / totalExpense) * 100).toFixed(1);
+                const color = backgroundColor[index];
+                const icon = categoryIcons[label] || '💰';
+                
+                legendHTML += `
+                    <div class="flex items-center justify-between text-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="w-4 h-4 rounded-full" style="background-color: ${color}"></div>
+                            <span>${icon} ${label}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium">${formatCurrency(value)}</span>
+                            <span class="text-gray-500">(${percentage}%)</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('chart-legend').innerHTML = legendHTML;
+        }
+
+        // ============================================
+        // 工具函數
+        // ============================================
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('zh-TW', {
+                style: 'currency',
+                currency: 'TWD',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount);
+        }
+
+        function getCategoryIcon(category) {
+            const icons = {
+                '餐飲': '🍽️',
+                '交通': '🚗',
+                '娛樂': '🎮',
+                '購物': '🛍️',
+                '其他': '📝'
+            };
+            return icons[category] || '💰';
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            const notificationMessage = document.getElementById('notification-message');
+            
+            notificationMessage.textContent = message;
+            
+            notification.className = 'fixed top-4 right-4 px-6 py-3 rounded-2xl shadow-lg transition-all duration-300 z-50';
+            if (type === 'success') {
+                notification.classList.add('bg-green-500', 'text-white');
+            } else if (type === 'error') {
+                notification.classList.add('bg-red-500', 'text-white');
+            } else {
+                notification.classList.add('bg-blue-500', 'text-white');
+            }
+            
+            notification.classList.remove('hidden');
+            
+            setTimeout(() => {
+                notification.classList.add('hidden');
+            }, 3000);
+        }
+
+        // ============================================
+        // 初始化
+        // ============================================
+        document.addEventListener('DOMContentLoaded', () => {
+            // 設置默認日期
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('expense-date').value = today;
+            
+            // 設置默認標籤樣式（預設顯示支出表單）
+            switchTab('expense');
+            
+            // 載入數據
+            loadTotalAssets();
+            updateMonthlySummaryAndList();
+            updateExpenseChart();
+            
+            console.log('✓ 記帳本已啟動 (本地版本)');
+        });
+    </script>
+</body>
+</html>
+
