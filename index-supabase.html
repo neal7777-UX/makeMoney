@@ -1048,28 +1048,53 @@
 
                 if (error) throw error;
 
-                // 自動從總資產扣除分期總額
-                const { data: assetsData } = await supabaseClient
-                    .from('assets')
-                    .select('total_assets')
-                    .eq('user_id', currentUser.id)
-                    .maybeSingle();
+                // 檢查當前月份是否需要扣除分期金額
+                const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+                let deductAmount = 0;
+                let notificationMessage = '分期計畫已新增';
 
-                const currentAssets = assetsData ? Number(assetsData.total_assets || 0) : 0;
-                const newAssets = Math.max(0, currentAssets - totalAmount);
-                
-                await supabaseClient
-                    .from('assets')
-                    .upsert({
-                        user_id: currentUser.id,
-                        total_assets: newAssets,
-                        updated_at: new Date().toISOString()
-                    }, {
-                        onConflict: 'user_id'
-                    });
+                // 如果當前月份在分期範圍內，扣除當月應還金額
+                if (startMonth <= currentMonth) {
+                    // 計算當前月份是第幾期
+                    const startDate = new Date(startMonth + '-01');
+                    const currentDate = new Date(currentMonth + '-01');
+                    const monthsDiff = (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                                     (currentDate.getMonth() - startDate.getMonth());
+                    
+                    // 如果還在分期期數內，扣除當月金額
+                    if (monthsDiff >= 0 && monthsDiff < periods) {
+                        deductAmount = monthlyPayment;
+                    }
+                }
+
+                // 只有當需要扣除時才更新總資產
+                if (deductAmount > 0) {
+                    const { data: assetsData } = await supabaseClient
+                        .from('assets')
+                        .select('total_assets')
+                        .eq('user_id', currentUser.id)
+                        .maybeSingle();
+
+                    const currentAssets = assetsData ? Number(assetsData.total_assets || 0) : 0;
+                    const newAssets = Math.max(0, currentAssets - deductAmount);
+                    
+                    await supabaseClient
+                        .from('assets')
+                        .upsert({
+                            user_id: currentUser.id,
+                            total_assets: newAssets,
+                            updated_at: new Date().toISOString()
+                        }, {
+                            onConflict: 'user_id'
+                        });
+
+                    notificationMessage += `，本月已扣除 ${formatCurrency(deductAmount)}`;
+                } else if (startMonth > currentMonth) {
+                    notificationMessage += '（尚未開始扣款）';
+                }
 
                 await loadTotalAssets();
-                showNotification(`分期計畫已新增，總資產已扣除 ${formatCurrency(totalAmount)}`, 'success');
+                showNotification(notificationMessage, 'success');
                 
                 // 清空表單
                 document.getElementById('installment-total').value = '';
@@ -1209,14 +1234,32 @@
                 
                 // 先获取要删除的数据（用于退还资产）
                 if (type === 'installment') {
+                    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
                     const { data: installmentData } = await supabaseClient
                         .from('installments')
-                        .select('total_amount')
+                        .select('total_amount, periods, start_month, monthly_payment')
                         .eq('id', id)
                         .eq('user_id', currentUser.id)
                         .single();
                     
-                    refundAmount = installmentData ? Number(installmentData.total_amount || 0) : 0;
+                    if (installmentData) {
+                        const startMonth = installmentData.start_month;
+                        const monthlyPayment = Number(installmentData.monthly_payment || 0);
+                        
+                        // 只退还本月已扣除的分期金额（如果本月在分期范围内）
+                        if (startMonth <= currentMonth) {
+                            const startDate = new Date(startMonth + '-01');
+                            const currentDate = new Date(currentMonth + '-01');
+                            const monthsDiff = (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                                             (currentDate.getMonth() - startDate.getMonth());
+                            const periods = Number(installmentData.periods || 0);
+                            
+                            // 如果本月在分期范围内，退还本月已扣金额
+                            if (monthsDiff >= 0 && monthsDiff < periods) {
+                                refundAmount = monthlyPayment;
+                            }
+                        }
+                    }
                 } else {
                     const { data: expenseData } = await supabaseClient
                         .from('expenses')
@@ -1398,6 +1441,14 @@
 
                     const monthlyPayment = totalAmount / periods;
                     
+                    // 先获取旧的分期计划信息
+                    const { data: oldInstallmentData } = await supabaseClient
+                        .from('installments')
+                        .select('periods, start_month, monthly_payment')
+                        .eq('id', id)
+                        .eq('user_id', currentUser.id)
+                        .single();
+                    
                     const { error } = await supabaseClient
                         .from(table)
                         .update({
@@ -1412,25 +1463,59 @@
 
                     if (error) throw error;
 
-                    // 更新总资产（调整差额）
-                    const difference = Number(currentAmount) - totalAmount;
-                    const { data: assetsData } = await supabaseClient
-                        .from('assets')
-                        .select('total_assets')
-                        .eq('user_id', currentUser.id)
-                        .maybeSingle();
+                    // 计算新旧分期在本月应还金额的差异
+                    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+                    let oldMonthlyPayment = 0;
+                    let newMonthlyPayment = 0;
                     
-                    const currentAssets = assetsData ? Number(assetsData.total_assets || 0) : 0;
+                    // 计算旧分期在本月的应还金额
+                    if (oldInstallmentData && oldInstallmentData.start_month <= currentMonth) {
+                        const oldStartDate = new Date(oldInstallmentData.start_month + '-01');
+                        const currentDate = new Date(currentMonth + '-01');
+                        const monthsDiff = (currentDate.getFullYear() - oldStartDate.getFullYear()) * 12 + 
+                                         (currentDate.getMonth() - oldStartDate.getMonth());
+                        const oldPeriods = Number(oldInstallmentData.periods || 0);
+                        
+                        if (monthsDiff >= 0 && monthsDiff < oldPeriods) {
+                            oldMonthlyPayment = Number(oldInstallmentData.monthly_payment || 0);
+                        }
+                    }
                     
-                    await supabaseClient
-                        .from('assets')
-                        .upsert({
-                            user_id: currentUser.id,
-                            total_assets: Math.max(0, currentAssets + difference),
-                            updated_at: new Date().toISOString()
-                        }, {
-                            onConflict: 'user_id'
-                        });
+                    // 计算新分期在本月的应还金额
+                    if (startMonth <= currentMonth) {
+                        const newStartDate = new Date(startMonth + '-01');
+                        const currentDate = new Date(currentMonth + '-01');
+                        const monthsDiff = (currentDate.getFullYear() - newStartDate.getFullYear()) * 12 + 
+                                         (currentDate.getMonth() - newStartDate.getMonth());
+                        
+                        if (monthsDiff >= 0 && monthsDiff < periods) {
+                            newMonthlyPayment = monthlyPayment;
+                        }
+                    }
+                    
+                    // 计算本月金额差异（退还旧的，扣除新的）
+                    const difference = oldMonthlyPayment - newMonthlyPayment;
+                    
+                    // 只有差异不为0时才更新总资产
+                    if (difference !== 0) {
+                        const { data: assetsData } = await supabaseClient
+                            .from('assets')
+                            .select('total_assets')
+                            .eq('user_id', currentUser.id)
+                            .maybeSingle();
+                        
+                        const currentAssets = assetsData ? Number(assetsData.total_assets || 0) : 0;
+                        
+                        await supabaseClient
+                            .from('assets')
+                            .upsert({
+                                user_id: currentUser.id,
+                                total_assets: Math.max(0, currentAssets + difference),
+                                updated_at: new Date().toISOString()
+                            }, {
+                                onConflict: 'user_id'
+                            });
+                    }
                 }
 
                 // 关闭模态框
