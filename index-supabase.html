@@ -1049,11 +1049,20 @@
                 if (error) throw error;
 
                 // 檢查當前月份是否需要扣除分期金額
+                // ⚠️ 重要：只扣除當月分期攤提金額，不是總額！
                 const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
                 let deductAmount = 0;
                 let notificationMessage = '分期計畫已新增';
 
-                // 如果當前月份在分期範圍內，扣除當月應還金額
+                console.log('📋 分期計劃資訊:', {
+                    totalAmount,
+                    periods,
+                    monthlyPayment,
+                    startMonth,
+                    currentMonth
+                });
+
+                // 如果當前月份在分期範圍內，扣除當月應還金額（不是總額！）
                 if (startMonth <= currentMonth) {
                     // 計算當前月份是第幾期
                     const startDate = new Date(startMonth + '-01');
@@ -1061,13 +1070,25 @@
                     const monthsDiff = (currentDate.getFullYear() - startDate.getFullYear()) * 12 + 
                                      (currentDate.getMonth() - startDate.getMonth());
                     
-                    // 如果還在分期期數內，扣除當月金額
+                    console.log('📅 月份計算:', {
+                        startMonth,
+                        currentMonth,
+                        monthsDiff,
+                        periods
+                    });
+                    
+                    // 如果還在分期期數內，扣除當月金額（monthlyPayment，不是totalAmount！）
                     if (monthsDiff >= 0 && monthsDiff < periods) {
-                        deductAmount = monthlyPayment;
+                        deductAmount = monthlyPayment; // ✅ 只扣除當月攤提
+                        console.log('✅ 扣除當月分期金額:', deductAmount, '(不是總額', totalAmount, ')');
+                    } else {
+                        console.log('⚠️ 當前月份不在分期範圍內');
                     }
+                } else {
+                    console.log('⏰ 分期尚未開始，不扣除');
                 }
 
-                // 只有當需要扣除時才更新總資產
+                // ⚠️ 只扣除當月分期金額，不是總額！
                 if (deductAmount > 0) {
                     const { data: assetsData } = await supabaseClient
                         .from('assets')
@@ -1076,7 +1097,13 @@
                         .maybeSingle();
 
                     const currentAssets = assetsData ? Number(assetsData.total_assets || 0) : 0;
-                    const newAssets = Math.max(0, currentAssets - deductAmount);
+                    const newAssets = Math.max(0, currentAssets - deductAmount); // ✅ 只扣除 deductAmount
+                    
+                    console.log('💰 總資產調整:', {
+                        currentAssets,
+                        deductAmount,
+                        newAssets
+                    });
                     
                     await supabaseClient
                         .from('assets')
