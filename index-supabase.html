@@ -110,12 +110,120 @@
             max-width: 100%;
             overflow-x: hidden;
         }
+        
+        /* 日历样式 */
+        .calendar-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .calendar-day {
+            width: 14.28%;
+            height: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 8px;
+        }
+        
+        .calendar-day:hover {
+            background-color: rgba(120, 161, 161, 0.1);
+            transform: scale(1.05);
+        }
+        
+        .calendar-day.today {
+            background-color: rgba(120, 161, 161, 0.2);
+            font-weight: bold;
+        }
+        
+        .calendar-day.has-expense {
+            background-color: rgba(255, 99, 132, 0.1);
+            position: relative;
+        }
+        
+        .calendar-day.has-expense::after {
+            content: '';
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 4px;
+            background-color: #FF6384;
+            border-radius: 50%;
+        }
+        
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .calendar-nav-btn {
+            padding: 4px 12px;
+            background: rgba(120, 161, 161, 0.1);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .calendar-nav-btn:hover {
+            background: rgba(120, 161, 161, 0.2);
+        }
+        
+        .calendar-weekday {
+            font-weight: 600;
+            color: #78a1a1;
+            padding: 8px 0;
+        }
     </style>
 </head>
 <body class="p-3 sm:p-4 md:p-8">
     <!-- 通知組件 -->
     <div id="notification" class="hidden fixed top-4 right-4 px-6 py-3 rounded-2xl shadow-lg z-50">
         <p id="notification-message" class="font-medium"></p>
+    </div>
+
+    <!-- 日期支出詳情模態框 -->
+    <div id="date-detail-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onclick="if(event.target === this) closeDateDetail()">
+        <div class="glass-card rounded-3xl p-6 sm:p-8 max-w-2xl w-full max-h-[80vh] shadow-2xl flex flex-col">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-2xl font-bold text-teal-800 flex items-center gap-2">
+                    <span>📅</span>
+                    <span id="date-detail-title">日期支出詳情</span>
+                </h3>
+                <div class="flex items-center gap-2">
+                    <button 
+                        id="date-edit-mode-btn"
+                        onclick="toggleDateEditMode()"
+                        class="px-3 py-1 text-sm bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors"
+                    >
+                        ✏️ 編輯
+                    </button>
+                    <button 
+                        id="date-done-edit-btn"
+                        onclick="toggleDateEditMode()"
+                        class="hidden px-3 py-1 text-sm bg-gray-400 hover:bg-gray-500 text-white rounded-lg transition-colors"
+                    >
+                        ✓ 完成
+                    </button>
+                    <button 
+                        onclick="closeDateDetail()"
+                        class="px-3 py-1 text-sm bg-gray-400 hover:bg-gray-500 text-white rounded-lg transition-colors"
+                    >
+                        ✕ 關閉
+                    </button>
+                </div>
+            </div>
+            <div id="date-transaction-list" class="flex-1 overflow-y-auto space-y-3 pr-2">
+                <!-- 該日期的交易紀錄將動態載入 -->
+                <div class="text-center text-gray-400 py-8">
+                    <p>載入中...</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 編輯交易模態框 -->
@@ -401,6 +509,17 @@
                     </button>
                 </div>
 
+                <!-- 日曆 -->
+                <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
+                    <h2 class="text-xl font-bold text-teal-800 mb-4 flex items-center gap-2">
+                        <span>📅</span>
+                        <span>日曆</span>
+                    </h2>
+                    <div id="calendar-container" class="mb-4">
+                        <!-- 日历将动态生成 -->
+                    </div>
+                </div>
+
                 <!-- 本月支出預覽 -->
                 <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
                     <h2 class="text-xl font-bold text-teal-800 mb-4 flex items-center gap-2">
@@ -579,37 +698,6 @@
                                 新增分期計畫
                             </button>
                         </form>
-                    </div>
-                </div>
-
-                <!-- 近期交易紀錄 -->
-                <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
-                    <div class="flex items-start justify-between mb-4">
-                        <h2 class="text-xl font-bold text-teal-800 flex items-center gap-2">
-                            <span>📜</span>
-                            <span>近期交易紀錄</span>
-                        </h2>
-                        <!-- 编辑模式切换按钮 -->
-                        <button 
-                            id="edit-mode-btn"
-                            onclick="toggleEditMode()"
-                            class="px-3 py-1 text-sm bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors"
-                        >
-                            ✏️ 編輯
-                        </button>
-                        <button 
-                            id="done-edit-btn"
-                            onclick="toggleEditMode()"
-                            class="hidden px-3 py-1 text-sm bg-gray-400 hover:bg-gray-500 text-white rounded-lg transition-colors"
-                        >
-                            ✓ 完成
-                        </button>
-                    </div>
-                    <div id="transaction-list" class="scroll-container space-y-3">
-                        <!-- 交易紀錄將動態載入 -->
-                        <div class="text-center text-gray-400 py-8">
-                            <p>載入中...</p>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -1212,11 +1300,251 @@
                 document.getElementById('monthly-installments').textContent = formatCurrency(monthlyInstallments);
                 document.getElementById('monthly-total').textContent = formatCurrency(monthlyExpenses + monthlyInstallments);
                 
-                // 渲染交易清單
-                renderTransactionList(transactionList);
+                // 保存交易数据供日历使用
+                allTransactions = transactionList;
+                
+                // 渲染日历
+                renderCalendar();
             } catch (error) {
                 console.error('更新月度總覽失敗:', error);
             }
+        }
+        
+        // 渲染日历
+        function renderCalendar() {
+            const container = document.getElementById('calendar-container');
+            const year = currentCalendarMonth.getFullYear();
+            const month = currentCalendarMonth.getMonth();
+            
+            // 获取月份第一天和最后一天
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            const startingDayOfWeek = firstDay.getDay();
+            
+            // 获取有交易的日期
+            const expenseDates = new Set();
+            allTransactions.forEach(tx => {
+                expenseDates.add(tx.date);
+            });
+            
+            // 今天的日期
+            const today = new Date();
+            const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+            const todayDate = today.getDate();
+            
+            // 构建日历HTML
+            const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+            const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
+            
+            let calendarHTML = `
+                <div class="calendar-header">
+                    <button onclick="changeCalendarMonth(-1)" class="calendar-nav-btn">← 上月</button>
+                    <h3 class="text-lg font-bold text-teal-800">${year}年 ${monthNames[month]}</h3>
+                    <button onclick="changeCalendarMonth(1)" class="calendar-nav-btn">下月 →</button>
+                </div>
+                <table class="calendar-table">
+                    <thead>
+                        <tr>
+                            ${weekdays.map(day => `<th class="calendar-weekday text-xs">${day}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            let day = 1;
+            for (let i = 0; i < 6; i++) {
+                calendarHTML += '<tr>';
+                for (let j = 0; j < 7; j++) {
+                    if (i === 0 && j < startingDayOfWeek) {
+                        calendarHTML += '<td></td>';
+                    } else if (day > daysInMonth) {
+                        calendarHTML += '<td></td>';
+                    } else {
+                        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                        const hasExpense = expenseDates.has(dateStr);
+                        const isToday = isCurrentMonth && day === todayDate;
+                        
+                        let dayClasses = 'calendar-day';
+                        if (isToday) dayClasses += ' today';
+                        if (hasExpense) dayClasses += ' has-expense';
+                        
+                        calendarHTML += `
+                            <td>
+                                <div class="${dayClasses}" onclick="showDateDetail('${dateStr}')">
+                                    ${day}
+                                </div>
+                            </td>
+                        `;
+                        day++;
+                    }
+                }
+                calendarHTML += '</tr>';
+                if (day > daysInMonth) break;
+            }
+            
+            calendarHTML += `
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = calendarHTML;
+        }
+        
+        // 切换日历月份
+        window.changeCalendarMonth = function(direction) {
+            currentCalendarMonth.setMonth(currentCalendarMonth.getMonth() + direction);
+            renderCalendar();
+        };
+        
+        // 显示日期详情
+        window.showDateDetail = async function(dateStr) {
+            // 获取该日期的所有交易
+            const dayTransactions = allTransactions.filter(tx => tx.date === dateStr);
+            
+            // 格式化日期显示
+            const date = new Date(dateStr);
+            const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+            const weekday = weekdays[date.getDay()];
+            const year = date.getFullYear();
+            const month = date.getMonth() + 1;
+            const day = date.getDate();
+            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const targetDate = new Date(date);
+            targetDate.setHours(0, 0, 0, 0);
+            
+            let dateLabel = `${year}年${month}月${day}日 星期${weekday}`;
+            if (targetDate.getTime() === today.getTime()) {
+                dateLabel = `今天 (${year}年${month}月${day}日)`;
+            } else if (targetDate.getTime() === today.getTime() - 86400000) {
+                dateLabel = `昨天 (${year}年${month}月${day}日)`;
+            }
+            
+            document.getElementById('date-detail-title').textContent = dateLabel;
+            
+            // 渲染该日期的交易列表
+            renderDateTransactionList(dayTransactions, dateStr);
+            
+            // 显示模态框
+            document.getElementById('date-detail-modal').classList.remove('hidden');
+        };
+        
+        // 关闭日期详情
+        window.closeDateDetail = function() {
+            document.getElementById('date-detail-modal').classList.add('hidden');
+            isDateEditMode = false;
+            const editBtn = document.getElementById('date-edit-mode-btn');
+            const doneBtn = document.getElementById('date-done-edit-btn');
+            editBtn.classList.remove('hidden');
+            doneBtn.classList.add('hidden');
+        };
+        
+        // 切换日期编辑模式
+        window.toggleDateEditMode = function() {
+            isDateEditMode = !isDateEditMode;
+            const editBtn = document.getElementById('date-edit-mode-btn');
+            const doneBtn = document.getElementById('date-done-edit-btn');
+            
+            if (isDateEditMode) {
+                editBtn.classList.add('hidden');
+                doneBtn.classList.remove('hidden');
+            } else {
+                editBtn.classList.remove('hidden');
+                doneBtn.classList.add('hidden');
+            }
+            
+            // 重新渲染交易列表
+            const dateTitle = document.getElementById('date-detail-title').textContent;
+            // 从标题中提取日期
+            const dateMatch = dateTitle.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+            if (dateMatch) {
+                const year = dateMatch[1];
+                const month = String(dateMatch[2]).padStart(2, '0');
+                const day = String(dateMatch[3]).padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
+                const dayTransactions = allTransactions.filter(tx => tx.date === dateStr);
+                renderDateTransactionList(dayTransactions, dateStr);
+            }
+        };
+        
+        // 渲染日期交易列表
+        function renderDateTransactionList(transactions, dateStr) {
+            const container = document.getElementById('date-transaction-list');
+            
+            if (transactions.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center text-gray-400 py-8">
+                        <p>該日期尚無交易紀錄</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // 按时间排序（最新的在前）
+            const sorted = transactions.sort((a, b) => b.timestamp - a.timestamp);
+            
+            // 计算当天总支出
+            const dayTotal = sorted.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+            
+            const transactionsHtml = sorted.map(tx => {
+                const categoryIcon = getCategoryIcon(tx.category);
+                const typeLabel = tx.type === 'installment' ? '分期' : '支出';
+                const typeBadgeColor = tx.type === 'installment' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700';
+                
+                // 编辑模式下显示编辑和删除按钮
+                const periods = tx.periods || 0;
+                const startMonth = tx.start_month || '';
+                const editButtons = isDateEditMode ? `
+                    <div class="flex gap-2 mt-2">
+                        <button 
+                            onclick="editTransaction('${tx.id}', '${tx.type}', ${tx.amount}, '${tx.category}', ${periods}, '${startMonth}')"
+                            class="flex-1 px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                        >
+                            編輯
+                        </button>
+                        <button 
+                            onclick="deleteTransaction('${tx.id}', '${tx.type}')"
+                            class="flex-1 px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+                        >
+                            刪除
+                        </button>
+                    </div>
+                ` : '';
+                
+                return `
+                    <div class="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                        <div class="flex justify-between items-start">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-2xl">${categoryIcon}</span>
+                                    <span class="text-sm font-medium text-gray-600">${tx.category}</span>
+                                    <span class="text-xs px-2 py-1 rounded-full ${typeBadgeColor}">${typeLabel}</span>
+                                </div>
+                                <p class="text-gray-700 font-medium">${tx.description || '無描述'}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-lg font-bold text-red-500">-${formatCurrency(tx.amount)}</p>
+                            </div>
+                        </div>
+                        ${editButtons}
+                    </div>
+                `;
+            }).join('');
+            
+            container.innerHTML = `
+                <div class="mb-4 pb-4 border-b-2 border-teal-200">
+                    <div class="flex justify-between items-center">
+                        <span class="text-lg font-bold text-teal-700">當日總計</span>
+                        <span class="text-2xl font-bold text-teal-700">${formatCurrency(dayTotal)}</span>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-1">共 ${sorted.length} 筆交易</p>
+                </div>
+                <div class="space-y-3">
+                    ${transactionsHtml}
+                </div>
+            `;
         }
 
         // 檢查月份是否在分期範圍內
@@ -1231,6 +1559,13 @@
 
         // 全局编辑模式状态
         let isEditMode = false;
+        let isDateEditMode = false;
+        
+        // 存储所有交易数据（用于日历）
+        let allTransactions = [];
+        
+        // 当前显示的日历月份
+        let currentCalendarMonth = new Date();
 
         // 切换编辑模式
         window.toggleEditMode = function() {
@@ -1335,6 +1670,21 @@
                 await loadTotalAssets();
                 await updateMonthlySummaryAndList();
                 await updateExpenseChart();
+                
+                // 如果日期详情模态框是打开的，刷新其内容
+                const dateModal = document.getElementById('date-detail-modal');
+                if (!dateModal.classList.contains('hidden')) {
+                    const dateTitle = document.getElementById('date-detail-title').textContent;
+                    const dateMatch = dateTitle.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+                    if (dateMatch) {
+                        const year = dateMatch[1];
+                        const month = String(dateMatch[2]).padStart(2, '0');
+                        const day = String(dateMatch[3]).padStart(2, '0');
+                        const dateStr = `${year}-${month}-${day}`;
+                        const dayTransactions = allTransactions.filter(tx => tx.date === dateStr);
+                        renderDateTransactionList(dayTransactions, dateStr);
+                    }
+                }
             } catch (error) {
                 console.error('刪除交易失敗:', error);
                 showNotification('刪除失敗: ' + error.message, 'error');
@@ -1556,6 +1906,21 @@
                 await loadTotalAssets();
                 await updateMonthlySummaryAndList();
                 await updateExpenseChart();
+                
+                // 如果日期详情模态框是打开的，刷新其内容
+                const dateModal = document.getElementById('date-detail-modal');
+                if (!dateModal.classList.contains('hidden')) {
+                    const dateTitle = document.getElementById('date-detail-title').textContent;
+                    const dateMatch = dateTitle.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+                    if (dateMatch) {
+                        const year = dateMatch[1];
+                        const month = String(dateMatch[2]).padStart(2, '0');
+                        const day = String(dateMatch[3]).padStart(2, '0');
+                        const dateStr = `${year}-${month}-${day}`;
+                        const dayTransactions = allTransactions.filter(tx => tx.date === dateStr);
+                        renderDateTransactionList(dayTransactions, dateStr);
+                    }
+                }
             } catch (error) {
                 console.error('更新交易失敗:', error);
                 showNotification('更新失敗: ' + error.message, 'error');
