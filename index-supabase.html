@@ -465,17 +465,31 @@
     <div id="main-content" class="hidden max-w-7xl mx-auto">
         <!-- 標題 -->
         <header class="mb-6 sm:mb-8">
-            <!-- 用户信息栏 -->
-            <div class="flex justify-between items-center mb-4">
-                <div class="flex items-center gap-2">
-                    <span class="text-teal-700 font-medium" id="user-email">用戶</span>
+            <!-- 用户信息栏（右上角） -->
+            <div class="flex justify-end items-center mb-4">
+                <div class="relative">
+                    <button 
+                        id="user-menu-btn"
+                        onclick="toggleUserMenu()"
+                        class="flex items-center gap-2 px-4 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+                    >
+                        <span id="user-email">用戶</span>
+                        <span class="text-xs">▼</span>
+                    </button>
+                    <!-- 下拉菜单 -->
+                    <div 
+                        id="user-menu"
+                        class="hidden absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
+                    >
+                        <button 
+                            onclick="signOut()"
+                            class="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-2"
+                        >
+                            <span>🚪</span>
+                            <span>登出</span>
+                        </button>
+                    </div>
                 </div>
-                <button 
-                    onclick="signOut()"
-                    class="px-4 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
-                >
-                    🚪 登出
-                </button>
             </div>
             <!-- 主标题 -->
             <div class="text-center">
@@ -511,10 +525,20 @@
 
                 <!-- 日曆 -->
                 <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
-                    <h2 class="text-xl font-bold text-teal-800 mb-4 flex items-center gap-2">
-                        <span>📅</span>
-                        <span>日曆</span>
-                    </h2>
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-bold text-teal-800 flex items-center gap-2">
+                            <span>📅</span>
+                            <span>日曆</span>
+                        </h2>
+                        <!-- 新增支出按钮 -->
+                        <button 
+                            onclick="showAddExpenseModal()"
+                            class="px-4 py-2 text-sm bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors flex items-center gap-2"
+                        >
+                            <span>➕</span>
+                            <span>新增支出</span>
+                        </button>
+                    </div>
                     <div id="calendar-container" class="mb-4">
                         <!-- 日历将动态生成 -->
                     </div>
@@ -541,7 +565,10 @@
                         </div>
                     </div>
                 </div>
+            </div>
 
+            <!-- 右側：支出類型統計 -->
+            <div class="space-y-6">
                 <!-- 支出類型統計 -->
                 <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
                     <h2 class="text-xl font-bold text-teal-800 mb-4 flex items-center gap-2">
@@ -556,32 +583,42 @@
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- 右側：操作區與交易紀錄 -->
-            <div class="space-y-6">
-                <!-- 操作區：新增支出與分期 -->
-                <div class="glass-card rounded-3xl p-4 sm:p-6 shadow-xl">
-                    <!-- 標籤切換 -->
-                    <div class="flex gap-2 mb-6">
-                        <button 
-                            id="tab-expense"
-                            onclick="switchTab('expense')"
-                            class="flex-1 py-3 px-4 rounded-2xl font-medium transition-all"
-                        >
-                            📝 新增日常支出
-                        </button>
-                        <button 
-                            id="tab-installment"
-                            onclick="switchTab('installment')"
-                            class="flex-1 py-3 px-4 rounded-2xl font-medium transition-all"
-                        >
-                            💳 新增分期計畫
-                        </button>
-                    </div>
+        <!-- 新增支出模態框 -->
+        <div id="add-expense-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onclick="if(event.target === this) closeAddExpenseModal()">
+            <div class="glass-card rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-2xl font-bold text-teal-800">新增支出</h3>
+                    <button 
+                        onclick="closeAddExpenseModal()"
+                        class="px-3 py-1 text-sm bg-gray-400 hover:bg-gray-500 text-white rounded-lg transition-colors"
+                    >
+                        ✕ 關閉
+                    </button>
+                </div>
+                
+                <!-- 標籤切換 -->
+                <div class="flex gap-2 mb-6">
+                    <button 
+                        id="modal-tab-expense"
+                        onclick="switchModalTab('expense')"
+                        class="flex-1 py-3 px-4 rounded-2xl font-medium transition-all bg-teal-500 text-white"
+                    >
+                        📝 日常支出
+                    </button>
+                    <button 
+                        id="modal-tab-installment"
+                        onclick="switchModalTab('installment')"
+                        class="flex-1 py-3 px-4 rounded-2xl font-medium transition-all bg-gray-100 text-gray-600"
+                    >
+                        💳 分期計畫
+                    </button>
+                </div>
 
-                    <!-- 新增日常支出表單 -->
-                    <div id="form-expense" class="form-content">
-                        <form class="space-y-4" onsubmit="event.preventDefault(); addExpense();">
+                <!-- 新增日常支出表單 -->
+                <div id="modal-form-expense" class="form-content">
+                    <form class="space-y-4" onsubmit="event.preventDefault(); addExpense();">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">日期</label>
                                 <input 
@@ -636,7 +673,7 @@
                     </div>
 
                     <!-- 新增分期計畫表單 -->
-                    <div id="form-installment" class="form-content hidden">
+                    <div id="modal-form-installment" class="form-content hidden">
                         <form class="space-y-4" onsubmit="event.preventDefault(); addInstallment();">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">總額</label>
@@ -860,6 +897,21 @@
             }
         };
 
+        // 切换用户菜单
+        window.toggleUserMenu = function() {
+            const menu = document.getElementById('user-menu');
+            menu.classList.toggle('hidden');
+        };
+        
+        // 点击外部关闭菜单
+        document.addEventListener('click', function(event) {
+            const menu = document.getElementById('user-menu');
+            const menuBtn = document.getElementById('user-menu-btn');
+            if (!menu.contains(event.target) && !menuBtn.contains(event.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+
         // 登出
         window.signOut = async function() {
             try {
@@ -871,6 +923,9 @@
                 
                 // 清空用户信息
                 currentUser = null;
+                
+                // 关闭用户菜单
+                document.getElementById('user-menu').classList.add('hidden');
                 
                 // 显示登录界面
                 document.getElementById('main-content').classList.add('hidden');
@@ -894,13 +949,6 @@
                     userEmailElement.textContent = '用戶 ' + currentUser.id.substring(0, 8);
                 }
 
-                // 設置默認日期
-                const today = new Date().toISOString().split('T')[0];
-                document.getElementById('expense-date').value = today;
-                
-                // 設置默認標籤樣式
-                switchTab('expense');
-                
                 // 載入數據
                 await loadTotalAssets();
                 await updateMonthlySummaryAndList();
@@ -1089,6 +1137,9 @@
                 // 更新顯示
                 await updateMonthlySummaryAndList();
                 await updateExpenseChart();
+                
+                // 關閉模態框
+                closeAddExpenseModal();
             } catch (error) {
                 console.error('新增支出失敗:', error);
                 showNotification('新增失敗，請稍後再試', 'error');
@@ -1220,6 +1271,9 @@
 
                 // 更新顯示
                 await updateMonthlySummaryAndList();
+                
+                // 關閉模態框
+                closeAddExpenseModal();
             } catch (error) {
                 console.error('新增分期計畫失敗:', error);
                 showNotification('新增失敗，請稍後再試', 'error');
@@ -2248,13 +2302,43 @@
         }
 
         // ============================================
-        // 標籤切換功能
+        // 新增支出模態框功能
         // ============================================
-        window.switchTab = function(tab) {
-            const expenseForm = document.getElementById('form-expense');
-            const installmentForm = document.getElementById('form-installment');
-            const expenseTab = document.getElementById('tab-expense');
-            const installmentTab = document.getElementById('tab-installment');
+        
+        // 显示新增支出模态框
+        window.showAddExpenseModal = function() {
+            const modal = document.getElementById('add-expense-modal');
+            modal.classList.remove('hidden');
+            
+            // 重置表单并显示日常支出标签
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('expense-date').value = today;
+            document.getElementById('expense-amount').value = '';
+            document.getElementById('expense-category').value = '餐飲';
+            document.getElementById('expense-description').value = '';
+            
+            // 重置分期表单
+            document.getElementById('installment-total').value = '';
+            document.getElementById('installment-periods').value = '';
+            document.getElementById('installment-start').value = '';
+            document.getElementById('installment-category').value = '餐飲';
+            document.getElementById('installment-description').value = '';
+            
+            // 切换到日常支出标签
+            switchModalTab('expense');
+        };
+        
+        // 关闭新增支出模态框
+        window.closeAddExpenseModal = function() {
+            document.getElementById('add-expense-modal').classList.add('hidden');
+        };
+        
+        // 切换模态框标签
+        window.switchModalTab = function(tab) {
+            const expenseForm = document.getElementById('modal-form-expense');
+            const installmentForm = document.getElementById('modal-form-installment');
+            const expenseTab = document.getElementById('modal-tab-expense');
+            const installmentTab = document.getElementById('modal-tab-installment');
 
             if (tab === 'expense') {
                 // 重置分期計畫表單
