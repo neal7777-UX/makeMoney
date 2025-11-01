@@ -2,8 +2,20 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="輕鬆管理您的財務，追蹤每一筆支出">
+    <meta name="theme-color" content="#78a1a1">
+    
+    <!-- PWA 支持 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="記帳本">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
     <title>休閒風個人記帳本 (Supabase 雲端版)</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
     
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -2372,6 +2384,35 @@
                 expenseTab.classList.remove('bg-teal-500', 'text-white');
             }
         };
+
+        // ============================================
+        // PWA Service Worker 注册
+        // ============================================
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then((registration) => {
+                        console.log('✓ Service Worker 注册成功:', registration.scope);
+                        
+                        // 检查更新
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // 有新版本可用
+                                    if (confirm('发现新版本，是否立即更新？')) {
+                                        newWorker.postMessage({ action: 'skipWaiting' });
+                                        window.location.reload();
+                                    }
+                                }
+                            });
+                        });
+                    })
+                    .catch((error) => {
+                        console.error('✗ Service Worker 注册失败:', error);
+                    });
+            });
+        }
 
         // ============================================
         // 啟動應用程式
