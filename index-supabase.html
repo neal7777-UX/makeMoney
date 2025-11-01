@@ -1562,13 +1562,13 @@
             }
         };
 
-        // 渲染交易清單
+        // 渲染交易清單（按日期分组）
         function renderTransactionList(transactions) {
             const listContainer = document.getElementById('transaction-list');
             
             const sortedTransactions = transactions
                 .sort((a, b) => b.timestamp - a.timestamp)
-                .slice(0, 30);
+                .slice(0, 100); // 增加显示数量以便分组
 
             if (sortedTransactions.length === 0) {
                 listContainer.innerHTML = `
@@ -1579,48 +1579,114 @@
                 return;
             }
 
-            listContainer.innerHTML = sortedTransactions.map(tx => {
-                const categoryIcon = getCategoryIcon(tx.category);
-                const typeLabel = tx.type === 'installment' ? '分期' : '支出';
-                const typeBadgeColor = tx.type === 'installment' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700';
+            // 按日期分组
+            const groupedByDate = {};
+            sortedTransactions.forEach(tx => {
+                const dateKey = tx.date; // 使用 YYYY-MM-DD 格式作为键
+                if (!groupedByDate[dateKey]) {
+                    groupedByDate[dateKey] = [];
+                }
+                groupedByDate[dateKey].push(tx);
+            });
+
+            // 获取所有日期并排序（最新的在前面）
+            const dates = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
+
+            // 格式化日期显示
+            function formatDateDisplay(dateStr) {
+                const date = new Date(dateStr);
+                const today = new Date();
+                const yesterday = new Date(today);
+                yesterday.setDate(yesterday.getDate() - 1);
                 
-                // 编辑模式下显示编辑和删除按钮
-                const periods = tx.periods || 0;
-                const startMonth = tx.start_month || '';
-                const editButtons = isEditMode ? `
-                    <div class="flex gap-2 mt-2">
-                        <button 
-                            onclick="editTransaction('${tx.id}', '${tx.type}', ${tx.amount}, '${tx.category}', ${periods}, '${startMonth}')"
-                            class="flex-1 px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-                        >
-                            編輯
-                        </button>
-                        <button 
-                            onclick="deleteTransaction('${tx.id}', '${tx.type}')"
-                            class="flex-1 px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
-                        >
-                            刪除
-                        </button>
-                    </div>
-                ` : '';
+                // 重置时间为 00:00:00 以便比较日期
+                today.setHours(0, 0, 0, 0);
+                yesterday.setHours(0, 0, 0, 0);
+                date.setHours(0, 0, 0, 0);
                 
-                return `
-                    <div class="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
-                        <div class="flex justify-between items-start">
-                            <div class="flex-1">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <span class="text-2xl">${categoryIcon}</span>
-                                    <span class="text-sm font-medium text-gray-600">${tx.category}</span>
-                                    <span class="text-xs px-2 py-1 rounded-full ${typeBadgeColor}">${typeLabel}</span>
-                                </div>
-                                <p class="text-gray-700 font-medium">${tx.description || '無描述'}</p>
-                                <p class="text-xs text-gray-400 mt-1">${tx.date}</p>
-                            </div>
-                            <div class="text-right">
-                                <p class="text-lg font-bold text-red-500">-${formatCurrency(tx.amount)}</p>
-                            </div>
+                const weekdays = ['日', '一', '二', '三', '四', '五', '六'];
+                
+                if (date.getTime() === today.getTime()) {
+                    return `今天 (${dateStr})`;
+                } else if (date.getTime() === yesterday.getTime()) {
+                    return `昨天 (${dateStr})`;
+                } else {
+                    const weekday = weekdays[date.getDay()];
+                    const month = date.getMonth() + 1;
+                    const day = date.getDate();
+                    return `${month}月${day}日 星期${weekday} (${dateStr})`;
+                }
+            }
+
+            // 渲染每个日期组
+            listContainer.innerHTML = dates.map(dateKey => {
+                const dayTransactions = groupedByDate[dateKey];
+                
+                // 计算当天总支出
+                const dayTotal = dayTransactions.reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+                
+                // 渲染当天所有交易
+                const transactionsHtml = dayTransactions.map(tx => {
+                    const categoryIcon = getCategoryIcon(tx.category);
+                    const typeLabel = tx.type === 'installment' ? '分期' : '支出';
+                    const typeBadgeColor = tx.type === 'installment' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700';
+                    
+                    // 编辑模式下显示编辑和删除按钮
+                    const periods = tx.periods || 0;
+                    const startMonth = tx.start_month || '';
+                    const editButtons = isEditMode ? `
+                        <div class="flex gap-2 mt-2">
+                            <button 
+                                onclick="editTransaction('${tx.id}', '${tx.type}', ${tx.amount}, '${tx.category}', ${periods}, '${startMonth}')"
+                                class="flex-1 px-3 py-1 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                            >
+                                編輯
+                            </button>
+                            <button 
+                                onclick="deleteTransaction('${tx.id}', '${tx.type}')"
+                                class="flex-1 px-3 py-1 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
+                            >
+                                刪除
+                            </button>
                         </div>
-                        ${editButtons}
+                    ` : '';
+                    
+                    return `
+                        <div class="bg-white rounded-2xl p-4 shadow-sm hover:shadow-md transition-shadow">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <span class="text-2xl">${categoryIcon}</span>
+                                        <span class="text-sm font-medium text-gray-600">${tx.category}</span>
+                                        <span class="text-xs px-2 py-1 rounded-full ${typeBadgeColor}">${typeLabel}</span>
+                                    </div>
+                                    <p class="text-gray-700 font-medium">${tx.description || '無描述'}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-lg font-bold text-red-500">-${formatCurrency(tx.amount)}</p>
+                                </div>
+                            </div>
+                            ${editButtons}
+                        </div>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="mb-6">
+                        <!-- 日期标题 -->
+                        <div class="flex items-center justify-between mb-3 px-2">
+                            <h3 class="text-lg font-bold text-teal-700 flex items-center gap-2">
+                                <span>📅</span>
+                                <span>${formatDateDisplay(dateKey)}</span>
+                            </h3>
+                            <span class="text-sm font-medium text-gray-500">
+                                共 ${dayTransactions.length} 筆，總計 ${formatCurrency(dayTotal)}
+                            </span>
+                        </div>
+                        <!-- 当天的所有交易 -->
+                        <div class="space-y-3">
+                            ${transactionsHtml}
+                        </div>
                     </div>
                 `;
             }).join('');
