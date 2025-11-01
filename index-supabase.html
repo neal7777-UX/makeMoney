@@ -1892,6 +1892,14 @@
             const installmentTab = document.getElementById('tab-installment');
 
             if (tab === 'expense') {
+                // 重置分期計畫表單
+                document.getElementById('installment-total').value = '';
+                document.getElementById('installment-periods').value = '';
+                document.getElementById('installment-start').value = '';
+                document.getElementById('installment-category').value = '餐飲';
+                document.getElementById('installment-description').value = '';
+                
+                // 顯示日常支出表單
                 expenseForm.classList.remove('hidden');
                 installmentForm.classList.add('hidden');
                 expenseTab.classList.add('bg-teal-500', 'text-white');
@@ -1899,6 +1907,14 @@
                 installmentTab.classList.add('bg-gray-100', 'text-gray-600');
                 installmentTab.classList.remove('bg-teal-500', 'text-white');
             } else {
+                // 重置日常支出表單
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('expense-date').value = today;
+                document.getElementById('expense-amount').value = '';
+                document.getElementById('expense-category').value = '餐飲';
+                document.getElementById('expense-description').value = '';
+                
+                // 顯示分期計畫表單
                 expenseForm.classList.add('hidden');
                 installmentForm.classList.remove('hidden');
                 installmentTab.classList.add('bg-teal-500', 'text-white');
