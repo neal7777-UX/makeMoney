@@ -2,7 +2,7 @@
   "name": "休閒風個人記帳本",
   "short_name": "記帳本",
   "description": "輕鬆管理您的財務，追蹤每一筆支出",
-  "start_url": "/index-supabase.html",
+  "start_url": "./index-supabase.html",
   "display": "standalone",
   "background_color": "#e0f2f1",
   "theme_color": "#78a1a1",
@@ -28,7 +28,7 @@
       "name": "新增支出",
       "short_name": "支出",
       "description": "快速新增一筆支出",
-      "url": "/?action=add-expense",
+      "url": "./index-supabase.html?action=add-expense",
       "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
     }
   ]
