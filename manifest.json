@@ -2,7 +2,7 @@
   "name": "休閒風個人記帳本",
   "short_name": "記帳本",
   "description": "輕鬆管理您的財務，追蹤每一筆支出",
-  "start_url": "/",
+  "start_url": "/index-supabase.html",
   "display": "standalone",
   "background_color": "#e0f2f1",
   "theme_color": "#78a1a1",
